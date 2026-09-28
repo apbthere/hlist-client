@@ -11,9 +11,16 @@ export async function login(username: string, password: string, rememberMe: bool
   if (!response.ok) throw new ApiError(response.status, response.message ?? "Sign in failed");
 }
 
-export async function register(username: string, password: string): Promise<void> {
-  const response = await send<User>("/api/users", { method: "POST", body: { username, password } });
+export async function register(username: string, password: string, inviteCode?: string): Promise<void> {
+  const body = inviteCode ? { username, password, inviteCode } : { username, password };
+  const response = await send<User>("/api/users", { method: "POST", body });
   if (!response.ok) throw new ApiError(response.status, response.message ?? "Could not create the account");
+}
+
+/** Whether creating an account needs an invite code (set on the server with HLIST_INVITE_CODE). */
+export async function inviteRequired(): Promise<boolean> {
+  const response = await send<{ inviteRequired: boolean }>("/api/auth/registration");
+  return response.data?.inviteRequired ?? false;
 }
 
 export async function logout(): Promise<void> {

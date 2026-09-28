@@ -40,6 +40,19 @@
                 <ion-input-password-toggle slot="end" />
               </ion-input>
             </ion-item>
+            <ion-item v-if="mode === 'register' && inviteRequired">
+              <ion-input
+                v-model="inviteCode"
+                aria-label="Invite code"
+                placeholder="Invite Code"
+                autocomplete="off"
+                autocapitalize="off"
+                :spellcheck="false"
+                enterkeyhint="go"
+                :maxlength="200"
+                required
+              />
+            </ion-item>
           </ion-list>
 
           <ion-list v-if="mode === 'signIn'" :inset="true" class="options">
@@ -50,7 +63,9 @@
           <p class="section-footer">
             {{ mode === "signIn"
               ? "Stay signed in on this device for 30 days, even after closing the app."
-              : "You'll stay signed in on this device for 30 days." }}
+              : inviteRequired
+                ? "Ask the person who runs this HList server for an invite code. You'll stay signed in on this device for 30 days."
+                : "You'll stay signed in on this device for 30 days." }}
           </p>
 
           <div class="actions">
@@ -66,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   IonButton, IonContent, IonInput, IonInputPasswordToggle, IonItem, IonLabel, IonList, IonPage,
   IonSegment, IonSegmentButton, IonSpinner, IonToggle, useIonRouter,
@@ -82,9 +97,16 @@ const mode = ref<"signIn" | "register">("signIn");
 const username = ref("");
 const password = ref("");
 const rememberMe = ref(true);
+const inviteCode = ref("");
+const inviteRequired = ref(false);
 const busy = ref(false);
 
-const canSubmit = computed(() => username.value.trim() !== "" && password.value !== "");
+const canSubmit = computed(() => username.value.trim() !== "" && password.value !== ""
+  && (mode.value === "signIn" || !inviteRequired.value || inviteCode.value.trim() !== ""));
+
+onMounted(async () => {
+  inviteRequired.value = await hlist.inviteRequired().catch(() => false);
+});
 
 async function submit() {
   if (!canSubmit.value || busy.value) return;
@@ -92,7 +114,7 @@ async function submit() {
   const name = username.value.trim();
   try {
     if (mode.value === "register") {
-      await hlist.register(name, password.value);
+      await hlist.register(name, password.value, inviteRequired.value ? inviteCode.value.trim() : undefined);
       await signIn(name, password.value, true);
     } else {
       await signIn(name, password.value, rememberMe.value);
