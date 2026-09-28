@@ -15,39 +15,38 @@
         <form @submit.prevent="submit">
           <ion-list :inset="true">
             <ion-item>
-              <ion-input
+              <text-field
+                id="username"
+                ref="usernameField"
                 v-model="username"
-                aria-label="Username"
+                name="username"
                 placeholder="Username"
                 autocomplete="username"
-                autocapitalize="off"
-                :spellcheck="false"
-                enterkeyhint="next"
                 :maxlength="50"
                 required
               />
             </ion-item>
             <ion-item>
-              <ion-input
+              <text-field
+                id="password"
+                ref="passwordField"
                 v-model="password"
+                name="password"
                 type="password"
-                aria-label="Password"
                 placeholder="Password"
                 :autocomplete="mode === 'signIn' ? 'current-password' : 'new-password'"
-                enterkeyhint="go"
+                :enterkeyhint="mode === 'register' && inviteRequired ? 'next' : 'go'"
                 required
-              >
-                <ion-input-password-toggle slot="end" />
-              </ion-input>
+              />
             </ion-item>
             <ion-item v-if="mode === 'register' && inviteRequired">
-              <ion-input
+              <text-field
+                id="invite-code"
+                ref="inviteField"
                 v-model="inviteCode"
-                aria-label="Invite code"
+                name="invite-code"
                 placeholder="Invite Code"
                 autocomplete="off"
-                autocapitalize="off"
-                :spellcheck="false"
                 enterkeyhint="go"
                 :maxlength="200"
                 required
@@ -69,24 +68,26 @@
           </p>
 
           <div class="actions">
-            <ion-button type="submit" expand="block" class="primary-action" :disabled="!canSubmit || busy">
+            <ion-button type="submit" expand="block" class="primary-action" :disabled="busy">
               <ion-spinner v-if="busy" name="crescent" />
               <span v-else>{{ mode === "signIn" ? "Sign In" : "Create Account" }}</span>
             </ion-button>
           </div>
         </form>
+        <p class="desktop-switch"><a href="/?ui=desktop">Use Desktop Version</a></p>
       </div>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import {
-  IonButton, IonContent, IonInput, IonInputPasswordToggle, IonItem, IonLabel, IonList, IonPage,
-  IonSegment, IonSegmentButton, IonSpinner, IonToggle, useIonRouter,
+  IonButton, IonContent, IonItem, IonLabel, IonList, IonPage, IonSegment, IonSegmentButton, IonSpinner,
+  IonToggle, useIonRouter,
 } from "@ionic/vue";
 import * as hlist from "../api/hlist";
+import TextField from "../components/TextField.vue";
 import { showError } from "../lib/feedback";
 import { signIn } from "../session";
 
@@ -101,15 +102,33 @@ const inviteCode = ref("");
 const inviteRequired = ref(false);
 const busy = ref(false);
 
-const canSubmit = computed(() => username.value.trim() !== "" && password.value !== ""
-  && (mode.value === "signIn" || !inviteRequired.value || inviteCode.value.trim() !== ""));
+type Field = InstanceType<typeof TextField> | null;
+const usernameField = ref<Field>(null);
+const passwordField = ref<Field>(null);
+const inviteField = ref<Field>(null);
 
 onMounted(async () => {
   inviteRequired.value = await hlist.inviteRequired().catch(() => false);
 });
 
+/** Reads what's in the fields now, which may differ from the model after an AutoFill without input events. */
+function missingField(): string | null {
+  username.value = usernameField.value?.currentValue() ?? username.value;
+  password.value = passwordField.value?.currentValue() ?? password.value;
+  if (inviteField.value) inviteCode.value = inviteField.value.currentValue();
+  if (!username.value.trim()) return "Enter your username.";
+  if (!password.value) return "Enter your password.";
+  if (mode.value === "register" && inviteRequired.value && !inviteCode.value.trim()) return "Enter your invite code.";
+  return null;
+}
+
 async function submit() {
-  if (!canSubmit.value || busy.value) return;
+  if (busy.value) return;
+  const missing = missingField();
+  if (missing) {
+    await showError(missing, mode.value === "signIn" ? "Couldn't Sign In" : "Couldn't Create Account");
+    return;
+  }
   busy.value = true;
   const name = username.value.trim();
   try {
@@ -171,6 +190,17 @@ h1 {
 
 .actions {
   margin: 28px 16px 0;
+}
+
+.desktop-switch {
+  margin: 28px 0 0;
+  font-size: 15px;
+  text-align: center;
+}
+
+.desktop-switch a {
+  color: var(--ion-color-primary);
+  text-decoration: none;
 }
 
 .primary-action {

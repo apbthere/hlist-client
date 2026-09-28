@@ -22,20 +22,27 @@
     <div class="section-header">Change Password</div>
     <form @submit.prevent="changePassword">
       <!-- Hidden username field so Keychain updates the right saved password. -->
-      <input class="hidden-username" type="text" autocomplete="username" :value="currentUser?.username" readonly tabindex="-1" aria-hidden="true" />
+      <input class="hidden-username" type="text" name="username" autocomplete="username" :value="currentUser?.username" readonly tabindex="-1" aria-hidden="true" />
       <ion-list :inset="true">
         <ion-item>
-          <ion-input v-model="currentPassword" type="password" aria-label="Current password" placeholder="Current Password" autocomplete="current-password" required />
+          <text-field id="current-password" ref="currentField" v-model="currentPassword" name="current-password" type="password" placeholder="Current Password" autocomplete="current-password" required />
         </ion-item>
         <ion-item>
-          <ion-input v-model="newPassword" type="password" aria-label="New password" placeholder="New Password" autocomplete="new-password" required />
+          <text-field id="new-password" ref="newField" v-model="newPassword" name="new-password" type="password" placeholder="New Password" autocomplete="new-password" enterkeyhint="done" required />
         </ion-item>
-        <ion-item button :detail="false" :disabled="!canChange || busy" @click="changePassword">
+        <ion-item button :detail="false" :disabled="busy" @click="changePassword">
           <ion-label color="primary">{{ busy ? "Changing…" : "Change Password" }}</ion-label>
         </ion-item>
       </ion-list>
       <p class="section-footer">Other devices will be signed out.</p>
     </form>
+
+    <ion-list :inset="true" class="desktop-link">
+      <ion-item button :detail="true" href="/?ui=desktop">
+        <ion-icon slot="start" :icon="desktopOutline" color="primary" />
+        <ion-label>Use Desktop Version</ion-label>
+      </ion-item>
+    </ion-list>
 
     <ion-list :inset="true" class="sign-out">
       <ion-item button :detail="false" @click="confirmSignOut">
@@ -46,13 +53,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import {
-  IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonTitle,
-  IonToolbar, actionSheetController, alertController,
+  IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonTitle, IonToolbar,
+  actionSheetController, alertController,
 } from "@ionic/vue";
-import { personCircle } from "ionicons/icons";
+import { desktopOutline, personCircle } from "ionicons/icons";
 import * as hlist from "../api/hlist";
+import TextField from "./TextField.vue";
 import { showError } from "../lib/feedback";
 import { currentUser, signOut } from "../session";
 
@@ -61,10 +69,18 @@ const emit = defineEmits<{ close: []; signedOut: [] }>();
 const currentPassword = ref("");
 const newPassword = ref("");
 const busy = ref(false);
-const canChange = computed(() => currentPassword.value !== "" && newPassword.value !== "");
+const currentField = ref<InstanceType<typeof TextField> | null>(null);
+const newField = ref<InstanceType<typeof TextField> | null>(null);
 
 async function changePassword(): Promise<void> {
-  if (!canChange.value || busy.value) return;
+  if (busy.value) return;
+  // Read the fields directly: AutoFill may have filled them without input events.
+  currentPassword.value = currentField.value?.currentValue() ?? currentPassword.value;
+  newPassword.value = newField.value?.currentValue() ?? newPassword.value;
+  if (!currentPassword.value || !newPassword.value) {
+    await showError("Enter your current password and a new password.", "Couldn't Change Password");
+    return;
+  }
   busy.value = true;
   try {
     await hlist.changePassword(currentPassword.value, newPassword.value);
@@ -115,8 +131,12 @@ async function confirmSignOut(): Promise<void> {
   font-weight: 600;
 }
 
-.sign-out {
+.desktop-link {
   margin-top: 32px;
+}
+
+.sign-out {
+  margin-top: 16px;
 }
 
 .hidden-username {
