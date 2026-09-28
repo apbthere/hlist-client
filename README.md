@@ -32,6 +32,17 @@ npm run build      # type-check and build to dist/
 npm run icons      # regenerate PNG icons from public/logo.svg
 ```
 
+## Docker
+
+The server repository's Dockerfile builds this client into the same image. It is passed in as a
+named build context, so keep both repositories side by side (`server/` and `hlist-client/`):
+
+```sh
+cd ../server
+docker compose up --build                                   # or:
+docker build --build-context client=../hlist-client -t hlist .
+```
+
 ## Installing on iPhone or iPad
 
 1. Build the client (`npm run build`) and start the server.
