@@ -94,6 +94,11 @@ export function suggestItems(previousItems: Item[], query: string, limit = 6): I
     .slice(0, limit);
 }
 
+/** How many of the items are still to buy (not checked off). */
+export function countToBuy(items: ListItem[]): number {
+  return items.filter((item) => !item.completed).length;
+}
+
 export interface DepartmentGroup {
   /** null for items without a department. */
   departmentId: number | null;

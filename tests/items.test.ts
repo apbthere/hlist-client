@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Item, ListItem } from "../src/api/types";
 import {
-  capitalizeWords, findCatalogMatch, groupByDepartment, isPhoneticMatch, normalizeItemName, parseItemPattern, soundex, suggestItems,
+  capitalizeWords, countToBuy, findCatalogMatch, groupByDepartment, isPhoneticMatch, normalizeItemName, parseItemPattern, soundex, suggestItems,
 } from "../src/lib/items";
 
 function item(itemId: number, itemName: string, departmentId: number | null = null, brandId: number | null = null): Item {
@@ -109,5 +109,13 @@ describe("groupByDepartment", () => {
     expect(groups[0].items.map((entry) => entry.itemName)).toEqual(["Butter", "Yogurt"]);
     expect(groups[1].items.map((entry) => entry.itemName)).toEqual(["Apples", "bananas"]);
     expect(groups[2].items.map((entry) => entry.itemName)).toEqual(["Batteries", "Mystery"]);
+  });
+});
+
+describe("countToBuy", () => {
+  it("counts items not checked off", () => {
+    expect(countToBuy([listItem(1, "Milk", 1), listItem(2, "Butter", 1, true), listItem(3, "Eggs", 1)])).toBe(2);
+    expect(countToBuy([listItem(1, "Milk", 1, true)])).toBe(0);
+    expect(countToBuy([])).toBe(0);
   });
 });

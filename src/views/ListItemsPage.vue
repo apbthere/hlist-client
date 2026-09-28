@@ -40,7 +40,10 @@
         </div>
 
         <template v-for="group in activeGroups" :key="group.departmentId ?? 'other'">
-          <div class="section-header">{{ group.title }}</div>
+          <div class="section-header">
+            <span>{{ group.title }}</span>
+            <span class="to-buy" :class="{ done: countToBuy(group.items) === 0 }">{{ toBuyLabel(group.items) }}</span>
+          </div>
           <ion-list :inset="true">
             <item-row
               v-for="item in group.items"
@@ -121,7 +124,7 @@ import type { Item, ListItem, ShoppingList } from "../api/types";
 import ItemEditorSheet from "../components/ItemEditorSheet.vue";
 import ItemRow from "../components/ItemRow.vue";
 import { showError } from "../lib/feedback";
-import { groupByDepartment } from "../lib/items";
+import { countToBuy, groupByDepartment } from "../lib/items";
 import { cachedList, findList } from "../lib/listCache";
 
 /** How long a just-checked item stays in place before moving to Completed, as in Reminders. */
@@ -154,9 +157,15 @@ const completedItems = computed(() => items.value
   .filter((item) => item.completed && !settling.has(item.itemId))
   .sort((first, second) => first.itemName.localeCompare(second.itemName)));
 const remainingLabel = computed(() => {
-  const remaining = items.value.filter((item) => !item.completed).length;
+  const remaining = countToBuy(items.value);
   return remaining === 0 ? "All done" : `${remaining} to buy`;
 });
+
+/** A department's heading count; "Done" while its last item settles before moving to Completed. */
+function toBuyLabel(departmentItems: ListItem[]): string {
+  const remaining = countToBuy(departmentItems);
+  return remaining === 0 ? "Done" : `${remaining} to buy`;
+}
 
 function readShowCompleted(): boolean {
   try {
@@ -343,6 +352,16 @@ onIonViewWillEnter(() => {
 
 .all-done ion-icon {
   font-size: 26px;
+}
+
+.to-buy {
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+}
+
+.to-buy.done {
+  color: var(--ion-color-primary);
+  font-weight: 600;
 }
 
 .bar-action {
