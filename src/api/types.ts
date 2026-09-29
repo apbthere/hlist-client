@@ -9,6 +9,9 @@ export interface ShoppingList {
   shoppingListName: string;
   username: string;
   completed: boolean;
+  /** ISO timestamp set by the server when the list was created. */
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Page<T> {
@@ -31,6 +34,10 @@ export interface ListItem {
   itemComment: string | null;
   username: string;
   completed: boolean;
+  /** When the item was added to this list. */
+  createdAt?: string;
+  /** When the item's entry on this list last changed, e.g. was checked off. */
+  updatedAt?: string;
 }
 
 /** An item record owned by the user, independent of any list. */

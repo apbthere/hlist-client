@@ -20,6 +20,7 @@
           <ion-title size="large">{{ title }}</ion-title>
         </ion-toolbar>
       </ion-header>
+      <p v-if="createdOn" class="list-date">{{ createdOn }}</p>
 
       <ion-refresher slot="fixed" @ion-refresh="refresh($event)">
         <ion-refresher-content />
@@ -124,6 +125,7 @@ import type { Item, ListItem, ShoppingList } from "../api/types";
 import ItemEditorSheet from "../components/ItemEditorSheet.vue";
 import ItemRow from "../components/ItemRow.vue";
 import { showError } from "../lib/feedback";
+import { formatDate } from "../lib/format";
 import { countToBuy, groupByDepartment } from "../lib/items";
 import { cachedList, findList } from "../lib/listCache";
 
@@ -149,6 +151,7 @@ const editorKey = ref(0);
 const editing = ref<ListItem | null>(null);
 
 const title = computed(() => list.value?.shoppingListName ?? "List");
+const createdOn = computed(() => formatDate(list.value?.createdAt));
 const activeGroups = computed(() => groupByDepartment(
   items.value.filter((item) => !item.completed || settling.has(item.itemId)),
   departments,
@@ -339,6 +342,12 @@ onIonViewWillEnter(() => {
 </script>
 
 <style scoped>
+.list-date {
+  margin: -4px 20px 0;
+  color: var(--hlist-secondary-label);
+  font-size: 15px;
+}
+
 .all-done {
   display: flex;
   align-items: center;

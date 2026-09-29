@@ -37,7 +37,7 @@
             <ion-item-sliding v-for="list in activeLists" :key="list.shoppingListId">
               <ion-item button :detail="true" @click="open(list)">
                 <div slot="start" class="list-badge"><ion-icon :icon="cart" /></div>
-                <ion-label>{{ list.shoppingListName }}</ion-label>
+                <ion-label>{{ list.shoppingListName }} <span class="list-date">{{ formatDate(list.createdAt) }}</span></ion-label>
               </ion-item>
               <ion-item-options side="end" @ion-swipe="toggleCompleted(list, $event)">
                 <ion-item-option color="primary" :expandable="true" @click="toggleCompleted(list, $event)">
@@ -60,7 +60,7 @@
             <ion-item-sliding v-for="list in completedLists" :key="list.shoppingListId">
               <ion-item button :detail="true" @click="open(list)">
                 <div slot="start" class="list-badge completed"><ion-icon :icon="checkmark" /></div>
-                <ion-label class="completed-label">{{ list.shoppingListName }}</ion-label>
+                <ion-label class="completed-label">{{ list.shoppingListName }} <span class="list-date">{{ formatDate(list.createdAt) }}</span></ion-label>
               </ion-item>
               <ion-item-options side="end" @ion-swipe="toggleCompleted(list, $event)">
                 <ion-item-option color="warning" :expandable="true" @click="toggleCompleted(list, $event)">
@@ -111,6 +111,7 @@ import * as hlist from "../api/hlist";
 import type { ShoppingList } from "../api/types";
 import AccountSheet from "../components/AccountSheet.vue";
 import { promptForText, showError } from "../lib/feedback";
+import { formatDate } from "../lib/format";
 import { rememberLists } from "../lib/listCache";
 
 const PAGE_SIZE = 50;
@@ -230,6 +231,12 @@ onIonViewWillEnter(() => {
 
 .list-badge.completed {
   background: var(--hlist-separator);
+}
+
+.list-date {
+  margin-inline-start: 4px;
+  color: var(--hlist-secondary-label);
+  font-size: 15px;
 }
 
 .completed-label {
