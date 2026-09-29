@@ -19,7 +19,7 @@
             ref="nameInput"
             v-model="name"
             aria-label="Item name"
-            placeholder="Item"
+            placeholder="e.g. Milk by Horizon in Dairy"
             autocapitalize="sentences"
             autocomplete="off"
             enterkeyhint="done"
