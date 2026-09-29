@@ -45,6 +45,15 @@ describe("parseItemPattern", () => {
     expect(parseItemPattern("Milk")).toBeNull();
     expect(parseItemPattern("Milk by Horizon")).toBeNull();
   });
+
+  it("parses the brand-less form at the last \" in \"", () => {
+    expect(parseItemPattern("baking potatoes in produce")).toEqual({
+      itemName: "baking potatoes", brandName: null, departmentName: "produce",
+    });
+    expect(parseItemPattern("pigs in a blanket in frozen")).toEqual({
+      itemName: "pigs in a blanket", brandName: null, departmentName: "frozen",
+    });
+  });
 });
 
 describe("capitalizeWords", () => {

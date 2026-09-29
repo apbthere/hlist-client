@@ -32,8 +32,10 @@
           <ion-label>
             <h3>{{ patternPreview.itemName }}</h3>
             <p>
-              <span>Brand: {{ patternPreview.brand.label }}</span><span v-if="patternPreview.brand.isNew" class="new-badge">New</span>
-              ·
+              <template v-if="patternPreview.brand">
+                <span>Brand: {{ patternPreview.brand.label }}</span><span v-if="patternPreview.brand.isNew" class="new-badge">New</span>
+                ·
+              </template>
               <span>Department: {{ patternPreview.department.label }}</span><span v-if="patternPreview.department.isNew" class="new-badge">New</span>
             </p>
           </ion-label>
@@ -101,7 +103,7 @@
           <ion-textarea v-model="comment" aria-label="Notes" placeholder="e.g. Unsweetened, family size" :auto-grow="true" :maxlength="1000" />
         </ion-item>
       </ion-list>
-      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department.</p>
+      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department, or “Milk in Dairy” for just the department.</p>
     </form>
   </ion-content>
 </template>
@@ -153,7 +155,7 @@ const sortedDepartments = computed(() => byLabel(props.departments));
 const sortedBrands = computed(() => byLabel(props.brands));
 
 const suggestions = computed(() => {
-  if (props.item || suggestionPicked.value || parseItemPattern(name.value)) return [];
+  if (props.item || suggestionPicked.value || patternPreview.value) return [];
   const query = normalizeItemName(name.value);
   return suggestItems(props.previousItems, name.value, 5)
     .filter((suggestion) => normalizeItemName(suggestion.itemName) !== query || suggestion.departmentId !== departmentId.value);
@@ -221,10 +223,16 @@ function previewEntry(type: CatalogType, label: string): PreviewEntry {
     : { label: capitalizeWords(label), isNew: true };
 }
 
-/** What "<item> by <brand> in <department>" will resolve to, shown live while typing. */
+/**
+ * What "<item> by <brand> in <department>" or "<item> in <department>" will resolve to, shown live while
+ * typing. A new department in the brand-less form is only created if confirmed when saving (see applyPattern).
+ */
 const patternPreview = computed(() => {
   const parsed = parseItemPattern(name.value);
   if (!parsed) return null;
+  if (parsed.brandName === null) {
+    return { itemName: parsed.itemName, brand: null, department: previewEntry("department", parsed.departmentName) };
+  }
   return {
     itemName: parsed.itemName,
     brand: previewEntry("brand", parsed.brandName),
@@ -232,13 +240,45 @@ const patternPreview = computed(() => {
   };
 });
 
+/** Asks whether the text after "in" is a new department (e.g. not for "pigs in a blanket"). */
+async function confirmNewDepartment(itemName: string, departmentName: string): Promise<boolean> {
+  const label = capitalizeWords(departmentName);
+  const alert = await alertController.create({
+    header: `Is “${label}” a Department?`,
+    message: `Create the department “${label}” and add “${itemName}” to it, or keep “${name.value.trim()}” as the item name.`,
+    buttons: [
+      { text: "Keep as Item Name", role: "cancel" },
+      { text: "Create Department", role: "confirm" },
+    ],
+  });
+  await alert.present();
+  const { role } = await alert.onDidDismiss();
+  return role === "confirm";
+}
+
 /**
  * Splits the name field into item, brand and department, creating any brand or department that
  * doesn't exist yet. Runs only when saving, so cancelling the sheet leaves the catalog untouched.
+ * Without a brand, a department that doesn't exist yet is only created if the user confirms it,
+ * since "in" is often part of a name ("pigs in a blanket").
  */
 async function applyPattern(): Promise<void> {
   const parsed = parseItemPattern(name.value);
   if (!parsed) return;
+  if (parsed.brandName === null) {
+    let department = findCatalogMatch(props.departments, parsed.departmentName);
+    if (department === null) {
+      await refreshCatalog("department");
+      department = findCatalogMatch(props.departments, parsed.departmentName);
+    }
+    if (department === null) {
+      if (!(await confirmNewDepartment(parsed.itemName, parsed.departmentName))) return;
+      department = await resolveCatalog("department", parsed.departmentName);
+    }
+    name.value = parsed.itemName;
+    departmentId.value = department;
+    return;
+  }
   const brand = await resolveCatalog("brand", parsed.brandName);
   const department = await resolveCatalog("department", parsed.departmentName);
   name.value = parsed.itemName;

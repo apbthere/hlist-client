@@ -40,15 +40,27 @@ export function normalizeItemName(value: string | null | undefined): string {
 
 export interface ItemPattern {
   itemName: string;
-  brandName: string;
+  /** null for the brand-less "<item> in <department>" form. */
+  brandName: string | null;
   departmentName: string;
 }
 
-/** Parses the "<item> by <brand> in <department>" shortcut, e.g. "Milk by Horizon in Dairy". */
+/**
+ * Parses the "<item> by <brand> in <department>" shortcut (e.g. "Milk by Horizon in Dairy") or its
+ * brand-less form "<item> in <department>". The brand-less form splits at the last " in ", so
+ * "pigs in a blanket in frozen" keeps "pigs in a blanket" as the item.
+ */
 export function parseItemPattern(value: string): ItemPattern | null {
-  const match = value.trim().match(/^(.+?)\s+by\s+(.+?)\s+in\s+(.+)$/i);
-  if (!match) return null;
-  return { itemName: match[1].trim(), brandName: match[2].trim(), departmentName: match[3].trim() };
+  const trimmed = value.trim();
+  const withBrand = trimmed.match(/^(.+?)\s+by\s+(.+?)\s+in\s+(.+)$/i);
+  if (withBrand) {
+    return { itemName: withBrand[1].trim(), brandName: withBrand[2].trim(), departmentName: withBrand[3].trim() };
+  }
+  const withoutBrand = trimmed.match(/^(.+)\s+in\s+(.+)$/i);
+  if (withoutBrand) {
+    return { itemName: withoutBrand[1].trim(), brandName: null, departmentName: withoutBrand[2].trim() };
+  }
+  return null;
 }
 
 /**
