@@ -43,7 +43,16 @@ describe("parseItemPattern", () => {
 
   it("ignores plain names", () => {
     expect(parseItemPattern("Milk")).toBeNull();
-    expect(parseItemPattern("Milk by Horizon")).toBeNull();
+    expect(parseItemPattern("Stand by")).toBeNull();
+  });
+
+  it("parses the brand-only form at the last \" by \"", () => {
+    expect(parseItemPattern("Greek yogurt by Mapple Hill")).toEqual({
+      itemName: "Greek yogurt", brandName: "Mapple Hill", departmentName: null,
+    });
+    expect(parseItemPattern("pigs in a blanket by Trader Joe's")).toEqual({
+      itemName: "pigs in a blanket", brandName: "Trader Joe's", departmentName: null,
+    });
   });
 
   it("parses the brand-less form at the last \" in \"", () => {
@@ -74,6 +83,10 @@ describe("parseItemPattern with lowercase input", () => {
 
   it("matches a misspelled department to the existing one by sound", () => {
     expect(findCatalogMatch(new Map([[7, "Dairy"]]), "diary")).toBe(7);
+  });
+
+  it("matches a misspelled brand to the existing one by sound", () => {
+    expect(findCatalogMatch(new Map([[3, "Maple Hill"]]), "Mapple Hill")).toBe(3);
   });
 });
 

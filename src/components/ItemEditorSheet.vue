@@ -32,11 +32,9 @@
           <ion-label>
             <h3>{{ patternPreview.itemName }}</h3>
             <p>
-              <template v-if="patternPreview.brand">
-                <span>Brand: {{ patternPreview.brand.label }}</span><span v-if="patternPreview.brand.isNew" class="new-badge">New</span>
-                ·
-              </template>
-              <span>Department: {{ patternPreview.department.label }}</span><span v-if="patternPreview.department.isNew" class="new-badge">New</span>
+              <span v-if="patternPreview.brand">Brand: {{ patternPreview.brand.label }}<span v-if="patternPreview.brand.isNew" class="new-badge">New</span></span>
+              <span v-if="patternPreview.brand && patternPreview.department"> · </span>
+              <span v-if="patternPreview.department">Department: {{ patternPreview.department.label }}<span v-if="patternPreview.department.isNew" class="new-badge">New</span></span>
             </p>
           </ion-label>
         </ion-item>
@@ -103,7 +101,7 @@
           <ion-textarea v-model="comment" aria-label="Notes" placeholder="e.g. Unsweetened, family size" :auto-grow="true" :maxlength="1000" />
         </ion-item>
       </ion-list>
-      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department, or “Milk in Dairy” for just the department.</p>
+      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department, or just “Milk by Horizon” or “Milk in Dairy”.</p>
     </form>
   </ion-content>
 </template>
@@ -224,31 +222,31 @@ function previewEntry(type: CatalogType, label: string): PreviewEntry {
 }
 
 /**
- * What "<item> by <brand> in <department>" or "<item> in <department>" will resolve to, shown live while
- * typing. A new department in the brand-less form is only created if confirmed when saving (see applyPattern).
+ * What the item-name shortcut ("<item> by <brand> in <department>", "<item> by <brand>" or
+ * "<item> in <department>") will resolve to, shown live while typing.
  */
 const patternPreview = computed(() => {
   const parsed = parseItemPattern(name.value);
   if (!parsed) return null;
-  if (parsed.brandName === null) {
-    return { itemName: parsed.itemName, brand: null, department: previewEntry("department", parsed.departmentName) };
-  }
   return {
     itemName: parsed.itemName,
-    brand: previewEntry("brand", parsed.brandName),
-    department: previewEntry("department", parsed.departmentName),
+    brand: parsed.brandName === null ? null : previewEntry("brand", parsed.brandName),
+    department: parsed.departmentName === null ? null : previewEntry("department", parsed.departmentName),
   };
 });
 
-/** Asks whether the text after "in" is a new department (e.g. not for "pigs in a blanket"). */
-async function confirmNewDepartment(itemName: string, departmentName: string): Promise<boolean> {
-  const label = capitalizeWords(departmentName);
+/** Asks whether a single-part shortcut really names a new brand or department (not "pigs in a blanket"). */
+async function confirmNewCatalogEntry(type: CatalogType, itemName: string, label: string): Promise<boolean> {
+  const title = type === "brand" ? "Brand" : "Department";
+  const entry = capitalizeWords(label);
   const alert = await alertController.create({
-    header: `Is “${label}” a Department?`,
-    message: `Create the department “${label}” and add “${itemName}” to it, or keep “${name.value.trim()}” as the item name.`,
+    header: `Is “${entry}” a ${title}?`,
+    message: type === "brand"
+      ? `Create the brand “${entry}” for “${itemName}”, or keep “${name.value.trim()}” as the item name.`
+      : `Create the department “${entry}” and add “${itemName}” to it, or keep “${name.value.trim()}” as the item name.`,
     buttons: [
       { text: "Keep as Item Name", role: "cancel" },
-      { text: "Create Department", role: "confirm" },
+      { text: `Create ${title}`, role: "confirm" },
     ],
   });
   await alert.present();
@@ -257,33 +255,32 @@ async function confirmNewDepartment(itemName: string, departmentName: string): P
 }
 
 /**
- * Splits the name field into item, brand and department, creating any brand or department that
- * doesn't exist yet. Runs only when saving, so cancelling the sheet leaves the catalog untouched.
- * Without a brand, a department that doesn't exist yet is only created if the user confirms it,
- * since "in" is often part of a name ("pigs in a blanket").
+ * Splits the name field into item, brand and department. Runs only when saving, so cancelling the sheet
+ * leaves the catalog untouched. The full "<item> by <brand> in <department>" form creates whatever doesn't
+ * exist yet; the single-part forms ("<item> by <brand>", "<item> in <department>") only create a new entry
+ * after the user confirms it, since "by" and "in" are often part of a name. A brand or department picked by
+ * hand is kept when the shortcut doesn't mention it.
  */
 async function applyPattern(): Promise<void> {
   const parsed = parseItemPattern(name.value);
   if (!parsed) return;
-  if (parsed.brandName === null) {
-    let department = findCatalogMatch(props.departments, parsed.departmentName);
-    if (department === null) {
-      await refreshCatalog("department");
-      department = findCatalogMatch(props.departments, parsed.departmentName);
+  const askBeforeCreating = parsed.brandName === null || parsed.departmentName === null;
+  const resolved: Partial<Record<CatalogType, number>> = {};
+  for (const [type, label] of [["brand", parsed.brandName], ["department", parsed.departmentName]] as const) {
+    if (label === null) continue;
+    if (askBeforeCreating) {
+      let existing = findCatalogMatch(catalog(type), label);
+      if (existing === null) {
+        await refreshCatalog(type);
+        existing = findCatalogMatch(catalog(type), label);
+      }
+      if (existing === null && !(await confirmNewCatalogEntry(type, parsed.itemName, label))) return;
     }
-    if (department === null) {
-      if (!(await confirmNewDepartment(parsed.itemName, parsed.departmentName))) return;
-      department = await resolveCatalog("department", parsed.departmentName);
-    }
-    name.value = parsed.itemName;
-    departmentId.value = department;
-    return;
+    resolved[type] = await resolveCatalog(type, label);
   }
-  const brand = await resolveCatalog("brand", parsed.brandName);
-  const department = await resolveCatalog("department", parsed.departmentName);
   name.value = parsed.itemName;
-  brandId.value = brand;
-  departmentId.value = department;
+  if (resolved.brand !== undefined) brandId.value = resolved.brand;
+  if (resolved.department !== undefined) departmentId.value = resolved.department;
 }
 
 async function chooseCatalog(type: CatalogType, event: CustomEvent<{ value: string }>): Promise<void> {

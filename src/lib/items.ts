@@ -40,26 +40,26 @@ export function normalizeItemName(value: string | null | undefined): string {
 
 export interface ItemPattern {
   itemName: string;
-  /** null for the brand-less "<item> in <department>" form. */
+  /** null when only a department was given ("<item> in <department>"). */
   brandName: string | null;
-  departmentName: string;
+  /** null when only a brand was given ("<item> by <brand>"). */
+  departmentName: string | null;
 }
 
 /**
- * Parses the "<item> by <brand> in <department>" shortcut (e.g. "Milk by Horizon in Dairy") or its
- * brand-less form "<item> in <department>". The brand-less form splits at the last " in ", so
- * "pigs in a blanket in frozen" keeps "pigs in a blanket" as the item.
+ * Parses the item-name shortcut:
+ * - "<item> by <brand> in <department>", e.g. "Milk by Horizon in Dairy"
+ * - "<item> by <brand>", split at the last " by " ("pigs in a blanket by Trader Joe's")
+ * - "<item> in <department>", split at the last " in " ("pigs in a blanket in frozen")
  */
 export function parseItemPattern(value: string): ItemPattern | null {
   const trimmed = value.trim();
-  const withBrand = trimmed.match(/^(.+?)\s+by\s+(.+?)\s+in\s+(.+)$/i);
-  if (withBrand) {
-    return { itemName: withBrand[1].trim(), brandName: withBrand[2].trim(), departmentName: withBrand[3].trim() };
-  }
-  const withoutBrand = trimmed.match(/^(.+)\s+in\s+(.+)$/i);
-  if (withoutBrand) {
-    return { itemName: withoutBrand[1].trim(), brandName: null, departmentName: withoutBrand[2].trim() };
-  }
+  const full = trimmed.match(/^(.+?)\s+by\s+(.+?)\s+in\s+(.+)$/i);
+  if (full) return { itemName: full[1].trim(), brandName: full[2].trim(), departmentName: full[3].trim() };
+  const brandOnly = trimmed.match(/^(.+)\s+by\s+(.+)$/i);
+  if (brandOnly) return { itemName: brandOnly[1].trim(), brandName: brandOnly[2].trim(), departmentName: null };
+  const departmentOnly = trimmed.match(/^(.+)\s+in\s+(.+)$/i);
+  if (departmentOnly) return { itemName: departmentOnly[1].trim(), brandName: null, departmentName: departmentOnly[2].trim() };
   return null;
 }
 
