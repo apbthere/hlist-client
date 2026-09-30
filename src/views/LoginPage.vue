@@ -75,6 +75,7 @@
           </div>
         </form>
         <p class="desktop-switch"><a href="/?ui=desktop">Use Desktop Version</a></p>
+        <build-info />
       </div>
     </ion-content>
   </ion-page>
@@ -87,6 +88,7 @@ import {
   IonToggle, useIonRouter,
 } from "@ionic/vue";
 import * as hlist from "../api/hlist";
+import BuildInfo from "../components/BuildInfo.vue";
 import TextField from "../components/TextField.vue";
 import { showError } from "../lib/feedback";
 import { signIn } from "../session";

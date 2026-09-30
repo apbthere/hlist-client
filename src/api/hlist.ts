@@ -23,6 +23,18 @@ export async function inviteRequired(): Promise<boolean> {
   return response.data?.inviteRequired ?? false;
 }
 
+export interface ServerBuild {
+  serverCommit: string;
+  clientCommit: string;
+  builtAt: string | null;
+}
+
+/** Which build the server is running (GET /api/version). */
+export async function serverBuild(): Promise<ServerBuild | null> {
+  const response = await send<ServerBuild>("/api/version");
+  return response.ok ? response.data : null;
+}
+
 export async function logout(): Promise<void> {
   await send<void>("/api/auth/logout", { method: "POST" });
 }

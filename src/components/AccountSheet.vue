@@ -49,6 +49,8 @@
         <ion-label color="danger" class="ion-text-center">Sign Out</ion-label>
       </ion-item>
     </ion-list>
+
+    <build-info />
   </ion-content>
 </template>
 
@@ -60,6 +62,7 @@ import {
 } from "@ionic/vue";
 import { desktopOutline, personCircle } from "ionicons/icons";
 import * as hlist from "../api/hlist";
+import BuildInfo from "./BuildInfo.vue";
 import TextField from "./TextField.vue";
 import { showError } from "../lib/feedback";
 import { currentUser, signOut } from "../session";
