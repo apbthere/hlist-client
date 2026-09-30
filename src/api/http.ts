@@ -11,6 +11,14 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Identifies this running copy of the app. Sent with every request so the server can tag live-update
+ * events with it, letting this device skip events about its own changes (see lib/live.ts).
+ */
+export const clientId: string = typeof crypto !== "undefined" && "randomUUID" in crypto
+  ? crypto.randomUUID()
+  : `client-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** Sent as JSON. */
@@ -51,7 +59,7 @@ export interface RawResponse<T> {
 /** Performs a request without treating error statuses as exceptions. */
 export async function send<T>(path: string, options: RequestOptions = {}): Promise<RawResponse<T>> {
   const method = options.method ?? "GET";
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", "X-HList-Client": clientId };
   if (method !== "GET") headers["X-XSRF-TOKEN"] = await csrfToken();
 
   let body: BodyInit | undefined;

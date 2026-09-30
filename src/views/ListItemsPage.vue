@@ -112,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import {
   IonBackButton, IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon, IonList, IonModal, IonPage,
   IonRefresher, IonRefresherContent, IonSpinner, IonTitle, IonToolbar, actionSheetController, alertController,
@@ -127,7 +127,8 @@ import ItemRow from "../components/ItemRow.vue";
 import { showError } from "../lib/feedback";
 import { formatDate } from "../lib/format";
 import { countToBuy, groupByDepartment } from "../lib/items";
-import { cachedList, findList } from "../lib/listCache";
+import { cachedList, findList, forgetList } from "../lib/listCache";
+import { debounced, subscribe } from "../lib/live";
 
 /** How long a just-checked item stays in place before moving to Completed, as in Reminders. */
 const SETTLE_MS = 900;
@@ -225,6 +226,27 @@ async function load(): Promise<void> {
     await showError(error, "Couldn't Load List");
   }
 }
+
+async function loadCatalog(): Promise<void> {
+  const [departmentList, brandList] = await Promise.all([hlist.getDepartments(), hlist.getBrands()]);
+  departments.clear();
+  for (const department of departmentList) departments.set(department.departmentId, department.departmentName);
+  brands.clear();
+  for (const brand of brandList) brands.set(brand.brandId, brand.brandName);
+}
+
+/** Re-reads this list (e.g. marked done or reopened on another device). */
+async function loadList(): Promise<void> {
+  forgetList(props.listId);
+  const found = await findList(props.listId);
+  if (found) list.value = found;
+}
+
+// Changes from other devices, each reloaded quietly (no error alerts for background refreshes).
+const reloadItems = debounced(loadItems);
+const reloadCatalog = debounced(loadCatalog);
+const reloadList = debounced(loadList);
+let stopLiveUpdates: () => void = () => {};
 
 async function refresh(event: RefresherCustomEvent): Promise<void> {
   try {
@@ -334,7 +356,22 @@ async function showOptions(): Promise<void> {
 
 onMounted(() => {
   presentingElement.value = page.value?.$el;
+  stopLiveUpdates = subscribe((event) => {
+    if (event.type === "resume") {
+      reloadItems();
+      reloadCatalog();
+      reloadList();
+    } else if (event.type === "list-items" && event.listId === props.listId) {
+      reloadItems();
+    } else if (event.type === "catalog") {
+      reloadCatalog();
+    } else if (event.type === "lists") {
+      reloadList();
+    }
+  });
 });
+
+onUnmounted(() => stopLiveUpdates());
 
 onIonViewWillEnter(() => {
   void load();

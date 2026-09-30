@@ -9,6 +9,11 @@ export function rememberLists(lists: ShoppingList[]): void {
   for (const list of lists) listsById.set(list.shoppingListId, list);
 }
 
+/** Drops a cached list so the next findList fetches it again (e.g. after another device changed it). */
+export function forgetList(listId: number): void {
+  listsById.delete(listId);
+}
+
 export function cachedList(listId: number): ShoppingList | undefined {
   return listsById.get(listId);
 }

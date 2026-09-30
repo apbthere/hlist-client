@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import * as hlist from "./api/hlist";
+import { disconnect as disconnectLiveUpdates } from "./lib/live";
 import type { User } from "./api/types";
 
 /** The signed-in user; null when signed out or not yet checked. */
@@ -26,6 +27,7 @@ export async function signOut(): Promise<void> {
   try {
     await hlist.logout();
   } finally {
+    disconnectLiveUpdates();
     clearUser();
   }
 }

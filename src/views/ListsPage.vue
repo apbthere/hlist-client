@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import {
   IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon, IonInfiniteScroll,
   IonInfiniteScrollContent, IonItem, IonItemOption, IonItemOptions, IonItemSliding, IonLabel, IonList,
@@ -112,6 +112,7 @@ import type { ShoppingList } from "../api/types";
 import AccountSheet from "../components/AccountSheet.vue";
 import { promptForText, showError } from "../lib/feedback";
 import { formatDate } from "../lib/format";
+import { debounced, subscribe } from "../lib/live";
 import { rememberLists } from "../lib/listCache";
 
 const PAGE_SIZE = 50;
@@ -206,9 +207,18 @@ function afterSignOut(): void {
   router.navigate("/login", "root", "replace");
 }
 
+// Changes from other devices: reload quietly (no error alerts for background refreshes).
+const refreshQuietly = debounced(() => fetchPage(0));
+let stopLiveUpdates: () => void = () => {};
+
 onMounted(() => {
   presentingElement.value = page.value?.$el;
+  stopLiveUpdates = subscribe((event) => {
+    if (event.type === "lists" || event.type === "resume") refreshQuietly();
+  });
 });
+
+onUnmounted(() => stopLiveUpdates());
 
 // Also runs when navigating back from a list, so completion changes made there show up.
 onIonViewWillEnter(() => {
