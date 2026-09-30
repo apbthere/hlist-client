@@ -35,6 +35,15 @@
   --ion-toolbar-background: #f2f2f7;
 }
 
+/*
+ * Grouped sheets use the same grey background as pages. This must come before the dark-mode block,
+ * which overrides it for sheets with the same selector.
+ */
+:root.ios ion-modal {
+  --ion-background-color: #f2f2f7;
+  --ion-toolbar-background: #f2f2f7;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --ion-color-primary: #30d158;
@@ -73,11 +82,6 @@
   }
 }
 
-/* Grouped sheets in light mode use the same grey background as pages. */
-:root.ios ion-modal {
-  --ion-background-color: #f2f2f7;
-  --ion-toolbar-background: #f2f2f7;
-}
 
 /* iOS section header above an inset group: small, secondary, sentence case. */
 .section-header {
