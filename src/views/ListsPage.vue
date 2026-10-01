@@ -36,7 +36,7 @@
           <ion-list :inset="true">
             <ion-item-sliding v-for="list in activeLists" :key="list.shoppingListId">
               <ion-item button :detail="true" @click="open(list)">
-                <div slot="start" class="list-badge"><ion-icon :icon="cart" /></div>
+                <store-badge slot="start" :store="list.store" />
                 <ion-label>{{ list.shoppingListName }} <span class="list-date">{{ formatDate(list.createdAt) }}</span></ion-label>
               </ion-item>
               <ion-item-options side="end" @ion-swipe="toggleCompleted(list, $event)">
@@ -59,7 +59,7 @@
           <ion-list v-if="showCompleted" :inset="true">
             <ion-item-sliding v-for="list in completedLists" :key="list.shoppingListId">
               <ion-item button :detail="true" @click="open(list)">
-                <div slot="start" class="list-badge completed"><ion-icon :icon="checkmark" /></div>
+                <store-badge slot="start" :store="list.store" :completed="true" />
                 <ion-label class="completed-label">{{ list.shoppingListName }} <span class="list-date">{{ formatDate(list.createdAt) }}</span></ion-label>
               </ion-item>
               <ion-item-options side="end" @ion-swipe="toggleCompleted(list, $event)">
@@ -105,11 +105,12 @@ import {
 } from "@ionic/vue";
 import type { InfiniteScrollCustomEvent, RefresherCustomEvent } from "@ionic/vue";
 import {
-  addCircle, arrowUndo, cart, cartOutline, checkmark, checkmarkCircle, personCircleOutline,
+  addCircle, arrowUndo, cartOutline, checkmarkCircle, personCircleOutline,
 } from "ionicons/icons";
 import * as hlist from "../api/hlist";
 import type { ShoppingList } from "../api/types";
 import AccountSheet from "../components/AccountSheet.vue";
+import StoreBadge from "../components/StoreBadge.vue";
 import { promptForText, showError } from "../lib/feedback";
 import { formatDate } from "../lib/format";
 import { debounced, subscribe } from "../lib/live";
@@ -227,22 +228,6 @@ onIonViewWillEnter(() => {
 </script>
 
 <style scoped>
-.list-badge {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  margin-inline-end: 14px;
-  border-radius: 50%;
-  color: #ffffff;
-  background: var(--ion-color-primary);
-  font-size: 17px;
-}
-
-.list-badge.completed {
-  background: var(--hlist-separator);
-}
-
 .list-date {
   margin-inline-start: 4px;
   color: var(--hlist-secondary-label);

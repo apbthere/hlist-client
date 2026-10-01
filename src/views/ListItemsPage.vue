@@ -20,7 +20,10 @@
           <ion-title size="large">{{ title }}</ion-title>
         </ion-toolbar>
       </ion-header>
-      <p v-if="createdOn" class="list-date">{{ createdOn }}</p>
+      <p v-if="createdOn || titleStoreIcon" class="list-date">
+        <img v-if="titleStoreIcon" class="title-store-icon" :src="titleStoreIcon" :alt="list?.store?.name" @error="titleIconFailed = true" />
+        {{ createdOn }}
+      </p>
 
       <ion-refresher slot="fixed" @ion-refresh="refresh($event)">
         <ion-refresher-content />
@@ -126,6 +129,7 @@ import ItemEditorSheet from "../components/ItemEditorSheet.vue";
 import ItemRow from "../components/ItemRow.vue";
 import { showError } from "../lib/feedback";
 import { formatDate } from "../lib/format";
+import { storeIconUrl } from "../lib/stores";
 import { countToBuy, groupByDepartment } from "../lib/items";
 import { cachedList, findList, forgetList } from "../lib/listCache";
 import { debounced, subscribe } from "../lib/live";
@@ -153,6 +157,8 @@ const editing = ref<ListItem | null>(null);
 
 const title = computed(() => list.value?.shoppingListName ?? "List");
 const createdOn = computed(() => formatDate(list.value?.createdAt));
+const titleIconFailed = ref(false);
+const titleStoreIcon = computed(() => (titleIconFailed.value ? null : storeIconUrl(list.value?.store)));
 const activeGroups = computed(() => groupByDepartment(
   items.value.filter((item) => !item.completed || settling.has(item.itemId)),
   departments,
@@ -379,6 +385,16 @@ onIonViewWillEnter(() => {
 </script>
 
 <style scoped>
+.title-store-icon {
+  width: 20px;
+  height: 20px;
+  margin-inline-end: 6px;
+  vertical-align: -4px;
+  border-radius: 5px;
+  object-fit: contain;
+  background: #ffffff;
+}
+
 .list-date {
   margin: -4px 20px 0;
   color: var(--hlist-secondary-label);

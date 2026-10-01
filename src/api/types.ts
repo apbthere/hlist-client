@@ -4,6 +4,12 @@ export interface User {
   username: string;
 }
 
+/** A store the server recognised in a list's name. */
+export interface StoreRef {
+  key: string;
+  name: string;
+}
+
 export interface ShoppingList {
   shoppingListId: number;
   shoppingListName: string;
@@ -12,6 +18,8 @@ export interface ShoppingList {
   /** ISO timestamp set by the server when the list was created. */
   createdAt?: string;
   updatedAt?: string;
+  /** The store the list's name mentions ("Costco run" → Costco), or null. */
+  store?: StoreRef | null;
 }
 
 export interface Page<T> {

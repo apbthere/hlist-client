@@ -37,6 +37,16 @@ export default defineConfig({
         navigateFallback: "/app/index.html",
         navigateFallbackDenylist: [/^\/api\//],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // Store icons: shown from the device's cache straight away (also offline), refreshed in the background.
+        runtimeCaching: [{
+          urlPattern: ({ url }) => url.pathname.startsWith("/api/store-icons/"),
+          handler: "StaleWhileRevalidate",
+          options: {
+            cacheName: "store-icons",
+            expiration: { maxEntries: 50, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            cacheableResponse: { statuses: [200] },
+          },
+        }],
       },
     }),
   ],
