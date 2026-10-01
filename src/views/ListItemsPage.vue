@@ -385,18 +385,22 @@ onIonViewWillEnter(() => {
 </script>
 
 <style scoped>
+/* A small app-icon-like tile; the padding keeps logos that fill their image (Costco) clear of the corners. */
 .title-store-icon {
-  width: 20px;
-  height: 20px;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
   margin-inline-end: 6px;
-  vertical-align: -4px;
-  border-radius: 5px;
+  padding: 2px;
+  vertical-align: -5px;
+  border-radius: 6px;
   object-fit: contain;
   background: #ffffff;
 }
 
+/* No negative top margin: anything pulled up would slide under the large-title header and be cut off. */
 .list-date {
-  margin: -4px 20px 0;
+  margin: 0 20px;
   color: var(--hlist-secondary-label);
   font-size: 15px;
 }
