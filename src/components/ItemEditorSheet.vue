@@ -12,9 +12,10 @@
   </ion-header>
 
   <ion-content>
-    <form @submit.prevent="save">
+    <!-- A tap anywhere outside the name field and its suggestions counts as leaving the name. -->
+    <form @submit.prevent="save" @pointerdown.capture="onPointerDown">
       <ion-list :inset="true" class="first-group">
-        <ion-item>
+        <ion-item class="name-item">
           <ion-input
             ref="nameInput"
             v-model="name"
@@ -25,6 +26,9 @@
             enterkeyhint="done"
             :maxlength="255"
             :clear-input="true"
+            @ion-focus="enterName()"
+            @ion-input="enterName(true)"
+            @ion-blur="scheduleLeaveName()"
           />
         </ion-item>
         <ion-item v-if="patternPreview" class="pattern-preview" lines="none">
@@ -42,7 +46,7 @@
 
       <template v-if="suggestions.length">
         <div class="section-header">Suggestions</div>
-        <ion-list :inset="true">
+        <ion-list :inset="true" class="suggestions-list">
           <ion-item v-for="suggestion in suggestions" :key="suggestion.itemId" button :detail="false" @click="useSuggestion(suggestion)">
             <ion-icon slot="start" :icon="timeOutline" class="suggestion-icon" />
             <ion-label>
@@ -142,6 +146,9 @@ const brandId = ref<number | null>(props.item?.brandId ?? null);
 const comment = ref(props.item?.itemComment ?? "");
 const busy = ref(false);
 const suggestionPicked = ref(false);
+/** Whether the user is still working on the name; suggestions show only then. */
+const nameActive = ref(false);
+let leaveNameTimer: ReturnType<typeof setTimeout> | undefined;
 
 const canSave = computed(() => name.value.trim() !== "");
 const departmentChoice = computed(() => (departmentId.value === null ? "none" : String(departmentId.value)));
@@ -153,7 +160,7 @@ const sortedDepartments = computed(() => byLabel(props.departments));
 const sortedBrands = computed(() => byLabel(props.brands));
 
 const suggestions = computed(() => {
-  if (props.item || suggestionPicked.value || patternPreview.value) return [];
+  if (props.item || !nameActive.value || suggestionPicked.value || patternPreview.value) return [];
   const query = normalizeItemName(name.value);
   return suggestItems(props.previousItems, name.value, 5)
     .filter((suggestion) => normalizeItemName(suggestion.itemName) !== query || suggestion.departmentId !== departmentId.value);
@@ -171,7 +178,60 @@ function describe(department: number | null, brand: number | null): string {
   return parts.length ? parts.join(" · ") : "No department or brand";
 }
 
+function enterName(typed = false): void {
+  clearTimeout(leaveNameTimer);
+  nameActive.value = true;
+  if (typed) suggestionPicked.value = false;
+}
+
+// Hiding the suggestions moves everything below them up, so it must wait until the tap that caused it has
+// landed: otherwise a tap on the quantity stepper would hit whatever moved under the finger, and a tap on a
+// suggestion (the name field loses focus first) would find the suggestion gone.
+function scheduleLeaveName(delayMs = 300): void {
+  clearTimeout(leaveNameTimer);
+  leaveNameTimer = setTimeout(leaveName, delayMs);
+}
+
+function onPointerDown(event: PointerEvent): void {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest(".name-item, .suggestions-list") || !nameActive.value) return;
+  // Leave right after this tap's click, or shortly anyway if the touch turns into a scroll.
+  window.addEventListener("click", () => scheduleLeaveName(0), { once: true });
+  scheduleLeaveName(600);
+}
+
+/** Done with the name: hide suggestions and fill department and brand from earlier items with this name. */
+function leaveName(): void {
+  clearTimeout(leaveNameTimer);
+  if (!nameActive.value) return;
+  nameActive.value = false;
+  fillFromHistory();
+}
+
+/**
+ * When the name matches an item added before, sets department and brand from the most recent one, but only
+ * where they are still None, so nothing picked by hand is overwritten. The "by … in …" shortcut sets these
+ * itself, so it is left alone.
+ */
+function fillFromHistory(): void {
+  if (props.item || patternPreview.value) return;
+  const wanted = normalizeItemName(name.value);
+  if (!wanted) return;
+  const latest = props.previousItems
+    .filter((previous) => normalizeItemName(previous.itemName) === wanted)
+    .reduce<Item | null>((newest, previous) => (!newest || previous.itemId > newest.itemId ? previous : newest), null);
+  if (!latest) return;
+  if (departmentId.value === null && latest.departmentId !== null && props.departments.has(latest.departmentId)) {
+    departmentId.value = latest.departmentId;
+  }
+  if (brandId.value === null && latest.brandId !== null && props.brands.has(latest.brandId)) {
+    brandId.value = latest.brandId;
+  }
+}
+
 function useSuggestion(suggestion: Item): void {
+  clearTimeout(leaveNameTimer);
+  nameActive.value = false;
   name.value = suggestion.itemName;
   quantity.value = suggestion.quantity ?? 1;
   departmentId.value = suggestion.departmentId;
@@ -348,6 +408,7 @@ async function handleDuplicate(): Promise<boolean> {
 
 async function save(): Promise<void> {
   if (!canSave.value || busy.value) return;
+  leaveName();
   busy.value = true;
   try {
     await applyPattern();
