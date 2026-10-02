@@ -14,16 +14,21 @@ export async function promptForText(options: {
   placeholder: string;
   confirmText: string;
   value?: string;
+  /** "url" shows the web-address keyboard, without auto-capitalisation. */
+  inputType?: "text" | "url";
 }): Promise<string | null> {
+  const url = options.inputType === "url";
   const alert = await alertController.create({
     header: options.header,
     message: options.message,
     inputs: [{
       name: "value",
-      type: "text",
+      type: url ? "url" : "text",
       placeholder: options.placeholder,
       value: options.value ?? "",
-      attributes: { maxlength: 255, autocapitalize: "sentences", enterkeyhint: "done" },
+      attributes: url
+        ? { maxlength: 2000, autocapitalize: "off", autocorrect: "off", spellcheck: false, enterkeyhint: "go" }
+        : { maxlength: 255, autocapitalize: "sentences", enterkeyhint: "done" },
     }],
     buttons: [
       { text: "Cancel", role: "cancel" },

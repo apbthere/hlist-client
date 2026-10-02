@@ -90,6 +90,38 @@ export function removeItem(listId: number, itemId: number): Promise<void> {
   return request(`/api/shopping-lists/${listId}/items/${itemId}`, { method: "DELETE" });
 }
 
+// Photos
+
+export interface PhotoInfo {
+  photoId: number;
+  width: number;
+  height: number;
+}
+
+/** Uploads a picture (the server re-encodes it and makes a thumbnail); attach it with setItemPhoto. */
+export function uploadPhoto(picture: Blob): Promise<PhotoInfo> {
+  return request("/api/photos", { method: "POST", raw: picture });
+}
+
+/** A downloaded photo; from a product page, also the product's name (without the brand) and brand. */
+export interface ImportedPhoto extends PhotoInfo {
+  title?: string | null;
+  brand?: string | null;
+}
+
+/** Has the server download a picture: an image's web address, or a product page's link (its product photo). */
+export function importPhoto(url: string): Promise<ImportedPhoto> {
+  return request("/api/photos/import", { method: "POST", body: { url } });
+}
+
+export function setItemPhoto(itemId: number, photoId: number): Promise<void> {
+  return request(`/api/items/${itemId}/photo`, { method: "PUT", body: { photoId } });
+}
+
+export function removeItemPhoto(itemId: number): Promise<void> {
+  return request(`/api/items/${itemId}/photo`, { method: "DELETE" });
+}
+
 // Catalog
 
 /** Every item the user has ever added, used for suggestions. */

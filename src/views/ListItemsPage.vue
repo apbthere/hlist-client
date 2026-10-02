@@ -58,6 +58,7 @@
               @toggle="toggle(item, $event)"
               @edit="edit(item)"
               @remove="remove(item, $event)"
+              @photo="viewing = item"
             />
           </ion-list>
         </template>
@@ -79,6 +80,7 @@
               @toggle="toggle(item, $event)"
               @edit="edit(item)"
               @remove="remove(item, $event)"
+              @photo="viewing = item"
             />
           </ion-list>
         </template>
@@ -97,6 +99,10 @@
         <span v-if="loaded && items.length" slot="end" class="remaining">{{ remainingLabel }}</span>
       </ion-toolbar>
     </ion-footer>
+
+    <ion-modal :is-open="viewing !== null" class="photo-viewer-modal" @did-dismiss="viewing = null">
+      <photo-viewer v-if="viewing?.photoId" :src="photoUrl(viewing.photoId)" :title="viewing.itemName" @close="viewing = null" />
+    </ion-modal>
 
     <ion-modal :is-open="editorOpen" :presenting-element="presentingElement" @did-dismiss="editorOpen = false">
       <item-editor-sheet
@@ -127,6 +133,8 @@ import * as hlist from "../api/hlist";
 import type { Item, ListItem, ShoppingList } from "../api/types";
 import ItemEditorSheet from "../components/ItemEditorSheet.vue";
 import ItemRow from "../components/ItemRow.vue";
+import PhotoViewer from "../components/PhotoViewer.vue";
+import { photoUrl, prefetchPhotos } from "../lib/photos";
 import { showError } from "../lib/feedback";
 import { formatDate } from "../lib/format";
 import { storeIconUrl } from "../lib/stores";
@@ -152,6 +160,8 @@ const loaded = ref(false);
 const settling = reactive(new Set<number>());
 const showCompleted = ref(readShowCompleted());
 const editorOpen = ref(false);
+/** The item whose photo is shown full screen. */
+const viewing = ref<ListItem | null>(null);
 const editorKey = ref(0);
 const editing = ref<ListItem | null>(null);
 
@@ -202,6 +212,8 @@ function describe(item: ListItem): string {
 
 async function loadItems(): Promise<void> {
   items.value = await hlist.getListItems(props.listId);
+  // Have this list's photos on the device before the store's poor signal makes them slow to load.
+  prefetchPhotos(items.value.flatMap((item) => (item.photoId ? [item.photoId] : [])));
   const known = new Set(previousItems.value.map((item) => item.itemId));
   for (const item of items.value) if (!known.has(item.itemId)) previousItems.value.push(item);
 }

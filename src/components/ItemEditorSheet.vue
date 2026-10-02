@@ -20,7 +20,7 @@
             ref="nameInput"
             v-model="name"
             aria-label="Item name"
-            placeholder="e.g. Milk by Horizon in Dairy"
+            :placeholder="namePending ? 'Getting the product…' : 'e.g. Milk by Horizon in Dairy'"
             autocapitalize="sentences"
             autocomplete="off"
             enterkeyhint="done"
@@ -29,6 +29,7 @@
             @ion-focus="enterName()"
             @ion-input="enterName(true)"
             @ion-blur="scheduleLeaveName()"
+            @paste="onNamePaste"
           />
         </ion-item>
         <ion-item v-if="patternPreview" class="pattern-preview" lines="none">
@@ -56,6 +57,43 @@
           </ion-item>
         </ion-list>
       </template>
+
+      <div class="section-header">Photo</div>
+      <ion-list :inset="true">
+        <ion-item v-if="photoId !== null || photoBusy">
+          <button type="button" class="photo-thumb" :disabled="photoBusy" aria-label="Show photo full screen" @click="viewerOpen = true">
+            <ion-spinner v-if="photoBusy" name="crescent" />
+            <img v-else :src="photoPreview ?? thumbnailUrl(photoId!)" alt="" />
+          </button>
+          <ion-label class="photo-hint">{{ photoBusy ? "Adding photo…" : "Tap the photo to see it full screen" }}</ion-label>
+        </ion-item>
+        <ion-item v-if="pasteBoxOpen" class="paste-item">
+          <!-- Long-press → Paste works on any page; inputmode="none" keeps the keyboard away. -->
+          <div
+            ref="pasteBox"
+            class="paste-box"
+            contenteditable="true"
+            inputmode="none"
+            role="textbox"
+            aria-label="Paste the picture here"
+            data-placeholder="Touch and hold here, then tap Paste"
+            @paste.prevent="onPaste"
+            @beforeinput.prevent
+            @drop.prevent
+          />
+          <ion-button slot="end" fill="clear" @click="pasteBoxOpen = false">Cancel</ion-button>
+        </ion-item>
+        <ion-item button :detail="false" :disabled="photoBusy" @click="choosePhoto">
+          <ion-icon slot="start" :icon="cameraOutline" color="primary" />
+          <ion-label color="primary">{{ photoId !== null ? "Replace Photo" : "Add Photo" }}</ion-label>
+        </ion-item>
+        <ion-item v-if="photoId !== null && !photoBusy" button :detail="false" @click="removePhoto">
+          <ion-icon slot="start" :icon="trashOutline" color="danger" />
+          <ion-label color="danger">Remove Photo</ion-label>
+        </ion-item>
+      </ion-list>
+      <input ref="cameraInput" class="file-input" type="file" accept="image/*" capture="environment" @change="onFileChosen" />
+      <input ref="libraryInput" class="file-input" type="file" accept="image/*" @change="onFileChosen" />
 
       <div class="section-header">Details</div>
       <ion-list :inset="true">
@@ -105,21 +143,30 @@
           <ion-textarea v-model="comment" aria-label="Notes" placeholder="e.g. Unsweetened, family size" :auto-grow="true" :maxlength="1000" />
         </ion-item>
       </ion-list>
-      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department, or just “Milk by Horizon” or “Milk in Dairy”.</p>
+      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department, or just “Milk by Horizon” or “Milk in Dairy”. Or paste a product’s link (Share → Copy on the store’s page) to fill in its name, brand and photo.</p>
     </form>
   </ion-content>
+
+  <ion-modal :is-open="viewerOpen" class="photo-viewer-modal" @did-dismiss="viewerOpen = false">
+    <photo-viewer v-if="viewerOpen && photoId !== null" :src="photoPreview ?? photoUrl(photoId)" :title="name.trim() || undefined" @close="viewerOpen = false" />
+  </ion-modal>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
   IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonSelect,
-  IonSelectOption, IonTextarea, IonTitle, IonToolbar, alertController,
+  IonModal, IonSelectOption, IonSpinner, IonTextarea, IonTitle, IonToolbar, actionSheetController, alertController,
 } from "@ionic/vue";
-import { add, remove, sparkles, timeOutline } from "ionicons/icons";
+import { add, cameraOutline, remove, sparkles, timeOutline, trashOutline } from "ionicons/icons";
 import * as hlist from "../api/hlist";
 import type { Item, ItemRequest, ListItem } from "../api/types";
+import PhotoViewer from "./PhotoViewer.vue";
 import { promptForText, showError } from "../lib/feedback";
+import {
+  canReadClipboard, linkFromPaste, pastedLinkOnly, photoUrl, pictureFromPaste, prepareForUpload, readClipboardLink, readClipboardPicture,
+  thumbnailUrl, webAddressIn,
+} from "../lib/photos";
 import { capitalizeWords, findCatalogMatch, normalizeItemName, parseItemPattern, suggestItems } from "../lib/items";
 
 type CatalogType = "department" | "brand";
@@ -144,6 +191,173 @@ const quantity = ref(props.item?.quantity ?? 1);
 const departmentId = ref<number | null>(props.item?.departmentId ?? null);
 const brandId = ref<number | null>(props.item?.brandId ?? null);
 const comment = ref(props.item?.itemComment ?? "");
+
+// Photo: uploaded as soon as it's chosen, attached to the item when it's saved (see applyPhoto).
+const initialPhotoId = props.item?.photoId ?? null;
+const photoId = ref<number | null>(initialPhotoId);
+/** A local copy of a just-chosen picture, shown until the item is saved. */
+const photoPreview = ref<string | null>(null);
+const photoBusy = ref(false);
+const viewerOpen = ref(false);
+const cameraInput = ref<HTMLInputElement | null>(null);
+const libraryInput = ref<HTMLInputElement | null>(null);
+const pasteBox = ref<HTMLElement | null>(null);
+const pasteBoxOpen = ref(false);
+/** Whether the name is being fetched from a pasted product link. */
+const namePending = ref(false);
+
+function setPreview(url: string | null): void {
+  if (photoPreview.value) URL.revokeObjectURL(photoPreview.value);
+  photoPreview.value = url;
+}
+
+async function choosePhoto(): Promise<void> {
+  // The file pickers and the clipboard must be opened right from the tap, so handlers don't await first.
+  const sheet = await actionSheetController.create({
+    header: "Item Photo",
+    buttons: [
+      { text: "Take Photo", handler: () => { cameraInput.value?.click(); } },
+      { text: "Choose from Photos", handler: () => { libraryInput.value?.click(); } },
+      { text: "Paste Image", handler: () => { void pastePhoto(); } },
+      { text: "From Web Link", handler: () => { void photoFromLink(); } },
+      { text: "Cancel", role: "cancel" },
+    ],
+  });
+  await sheet.present();
+}
+
+function onFileChosen(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) void usePicture(file);
+}
+
+/**
+ * Reads the copied picture straight from the clipboard where the browser allows it (HTTPS). Otherwise, or if
+ * that finds nothing, shows a box to long-press and Paste into, which works on any page.
+ */
+async function pastePhoto(): Promise<void> {
+  if (canReadClipboard()) {
+    try {
+      const picture = await readClipboardPicture();
+      if (picture) {
+        await usePicture(picture);
+        return;
+      }
+      const link = await readClipboardLink();
+      if (link) {
+        await importPicture(link);
+        return;
+      }
+    } catch {
+      // Permission refused or unsupported type: fall back to pasting into the box.
+    }
+  }
+  openPasteBox();
+}
+
+function openPasteBox(): void {
+  pasteBoxOpen.value = true;
+  void nextTick(() => pasteBox.value?.focus());
+}
+
+async function onPaste(event: ClipboardEvent): Promise<void> {
+  const picture = pictureFromPaste(event);
+  const link = picture ? null : linkFromPaste(event);
+  if (picture) {
+    pasteBoxOpen.value = false;
+    await usePicture(picture);
+  } else if (link) {
+    pasteBoxOpen.value = false;
+    await importPicture(link);
+  } else {
+    await showError("What was pasted isn't a picture or a web link. On the store's website, touch and hold the product photo and tap Copy, then paste here again.", "Not a Picture");
+  }
+}
+
+/** Asks for a product page's link (Share → Copy on the store's page) or a picture's address. */
+async function photoFromLink(): Promise<void> {
+  const link = await promptForText({
+    header: "Photo from Web Link",
+    message: "Paste the link to the product's page, or to the picture itself.",
+    placeholder: "https://",
+    confirmText: "Add",
+    inputType: "url",
+  });
+  if (!link) return;
+  const address = webAddressIn(link) ?? link;
+  await importPicture(address);
+}
+
+/**
+ * Pasting a product link (or a copied picture) into the name field adds the photo and, if no name was typed yet,
+ * names the item after the product and sets its brand. Ordinary text pastes as usual.
+ */
+function onNamePaste(event: ClipboardEvent): void {
+  const picture = pictureFromPaste(event);
+  const link = picture ? null : pastedLinkOnly(event);
+  if (!picture && !link) return;
+  event.preventDefault();
+  if (picture) void usePicture(picture);
+  else if (link) void importPicture(link, true);
+}
+
+/**
+ * The server downloads the picture (or the page's product picture) and stores it like an upload. From the name
+ * field, the product's name fills an empty name and its brand an empty brand.
+ */
+async function importPicture(link: string, fromNameField = false): Promise<void> {
+  const nameFromPage = fromNameField && name.value.trim() === "";
+  photoBusy.value = true;
+  namePending.value = nameFromPage;
+  try {
+    const imported = await hlist.importPhoto(link);
+    setPreview(null);
+    photoId.value = imported.photoId;
+    if (nameFromPage && imported.title && name.value.trim() === "") {
+      name.value = imported.title;
+      suggestionPicked.value = false;
+    }
+    // The page's brand, matched to an existing one (or added), unless a brand was already chosen.
+    if (fromNameField && imported.brand && brandId.value === null) {
+      brandId.value = await resolveCatalog("brand", imported.brand);
+    }
+  } catch (error) {
+    await showError(error, "Couldn't Add Photo");
+  } finally {
+    photoBusy.value = false;
+    namePending.value = false;
+  }
+}
+
+async function usePicture(picture: Blob): Promise<void> {
+  photoBusy.value = true;
+  try {
+    const prepared = await prepareForUpload(picture);
+    const uploaded = await hlist.uploadPhoto(prepared);
+    setPreview(URL.createObjectURL(prepared));
+    photoId.value = uploaded.photoId;
+  } catch (error) {
+    await showError(error, "Couldn't Add Photo");
+  } finally {
+    photoBusy.value = false;
+  }
+}
+
+function removePhoto(): void {
+  photoId.value = null;
+  setPreview(null);
+}
+
+/** Puts the chosen photo on the saved item, or removes it, if it changed. */
+async function applyPhoto(itemId: number, currentPhotoId: number | null): Promise<void> {
+  if (photoId.value === currentPhotoId) return;
+  if (photoId.value !== null) await hlist.setItemPhoto(itemId, photoId.value);
+  else await hlist.removeItemPhoto(itemId);
+}
+
+onUnmounted(() => setPreview(null));
 const busy = ref(false);
 const suggestionPicked = ref(false);
 /** Whether the user is still working on the name; suggestions show only then. */
@@ -227,6 +441,9 @@ function fillFromHistory(): void {
   if (brandId.value === null && latest.brandId !== null && props.brands.has(latest.brandId)) {
     brandId.value = latest.brandId;
   }
+  if (photoId.value === null && latest.photoId) {
+    photoId.value = latest.photoId;
+  }
 }
 
 function useSuggestion(suggestion: Item): void {
@@ -237,6 +454,8 @@ function useSuggestion(suggestion: Item): void {
   departmentId.value = suggestion.departmentId;
   brandId.value = suggestion.brandId;
   comment.value = suggestion.itemComment ?? "";
+  photoId.value = suggestion.photoId ?? null;
+  setPreview(null);
   suggestionPicked.value = true;
 }
 
@@ -402,6 +621,7 @@ async function handleDuplicate(): Promise<boolean> {
     brandId: duplicate.brandId,
     comment: duplicate.itemComment,
   });
+  if (photoId.value !== null) await applyPhoto(duplicate.itemId, duplicate.photoId ?? null);
   emit("saved");
   return true;
 }
@@ -414,9 +634,11 @@ async function save(): Promise<void> {
     await applyPattern();
     if (props.item) {
       await hlist.updateItem(props.listId, props.item.itemId, requestBody());
+      await applyPhoto(props.item.itemId, initialPhotoId);
       emit("saved");
     } else if (!(await handleDuplicate())) {
-      await hlist.addItem(props.listId, requestBody());
+      const created = await hlist.addItem(props.listId, requestBody());
+      await applyPhoto(created.itemId, null);
       emit("saved");
     }
   } catch (error) {
@@ -435,6 +657,59 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.photo-thumb {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 8px 14px 8px 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(118, 118, 128, 0.12);
+}
+
+.photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.paste-box {
+  flex: 1;
+  min-height: 44px;
+  margin: 8px 0;
+  padding: 11px 12px;
+  border: 1.5px dashed var(--ion-color-primary);
+  border-radius: 10px;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 15px;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.paste-box:empty::before {
+  content: attr(data-placeholder);
+  color: var(--hlist-secondary-label);
+}
+
+.photo-hint {
+  color: var(--hlist-secondary-label);
+  font-size: 15px;
+}
+
+/* Hidden but still clickable from code (display:none file inputs are ignored by some browsers). */
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .first-group {
   margin-top: 20px;
 }

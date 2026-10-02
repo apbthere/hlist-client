@@ -39,6 +39,15 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // Store icons: shown from the device's cache straight away (also offline), refreshed in the background.
         runtimeCaching: [{
+          // Item photos never change, so a cached copy is always right; kept for use in stores with poor signal.
+          urlPattern: ({ url }) => url.pathname.startsWith("/api/photos/"),
+          handler: "CacheFirst",
+          options: {
+            cacheName: "item-photos",
+            expiration: { maxEntries: 400, maxAgeSeconds: 365 * 24 * 60 * 60 },
+            cacheableResponse: { statuses: [200] },
+          },
+        }, {
           urlPattern: ({ url }) => url.pathname.startsWith("/api/store-icons/"),
           handler: "StaleWhileRevalidate",
           options: {

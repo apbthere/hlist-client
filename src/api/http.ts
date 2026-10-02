@@ -25,6 +25,8 @@ export interface RequestOptions {
   body?: unknown;
   /** Sent as application/x-www-form-urlencoded (used by the login endpoint). */
   form?: Record<string, string>;
+  /** Sent as is, e.g. a photo (POST /api/photos). */
+  raw?: Blob;
 }
 
 type UnauthorizedHandler = () => void;
@@ -63,7 +65,10 @@ export async function send<T>(path: string, options: RequestOptions = {}): Promi
   if (method !== "GET") headers["X-XSRF-TOKEN"] = await csrfToken();
 
   let body: BodyInit | undefined;
-  if (options.form !== undefined) {
+  if (options.raw !== undefined) {
+    headers["Content-Type"] = options.raw.type || "application/octet-stream";
+    body = options.raw;
+  } else if (options.form !== undefined) {
     body = new URLSearchParams(options.form);
   } else if (options.body !== undefined) {
     headers["Content-Type"] = "application/json";

@@ -26,6 +26,16 @@
         </h3>
         <p v-if="detail">{{ detail }}</p>
       </ion-label>
+      <button
+        v-if="item.photoId"
+        slot="end"
+        type="button"
+        class="thumb"
+        :aria-label="`Show photo of ${item.itemName}`"
+        @click.stop="emit('photo')"
+      >
+        <img :src="thumbnailUrl(item.photoId)" alt="" loading="lazy" decoding="async" />
+      </button>
     </ion-item>
 
     <ion-item-options side="end" @ion-swipe="emit('remove', slidingElement())">
@@ -42,6 +52,7 @@ import { ref } from "vue";
 import { IonIcon, IonItem, IonItemOption, IonItemOptions, IonItemSliding, IonLabel } from "@ionic/vue";
 import { arrowUndo, checkmarkCircle, ellipseOutline, trash } from "ionicons/icons";
 import type { ListItem } from "../api/types";
+import { thumbnailUrl } from "../lib/photos";
 
 defineProps<{
   item: ListItem;
@@ -54,6 +65,7 @@ const emit = defineEmits<{
   toggle: [sliding?: HTMLIonItemSlidingElement];
   edit: [];
   remove: [sliding?: HTMLIonItemSlidingElement];
+  photo: [];
 }>();
 
 const sliding = ref<{ $el: HTMLIonItemSlidingElement } | null>(null);
@@ -64,6 +76,28 @@ function slidingElement(): HTMLIonItemSlidingElement | undefined {
 </script>
 
 <style scoped>
+.thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: 6px 0 6px 10px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(118, 118, 128, 0.12);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+ion-item.checked .thumb {
+  opacity: 0.5;
+}
+
 .check {
   display: grid;
   place-items: center;

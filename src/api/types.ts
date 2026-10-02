@@ -46,6 +46,8 @@ export interface ListItem {
   createdAt?: string;
   /** When the item's entry on this list last changed, e.g. was checked off. */
   updatedAt?: string;
+  /** The item's photo (see lib/photos.ts), or null. */
+  photoId?: number | null;
 }
 
 /** An item record owned by the user, independent of any list. */
@@ -57,6 +59,8 @@ export interface Item {
   brandId: number | null;
   itemComment: string | null;
   username: string;
+  /** The item's photo (see lib/photos.ts), or null. */
+  photoId?: number | null;
 }
 
 export interface Department {
