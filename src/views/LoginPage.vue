@@ -92,6 +92,7 @@ import BuildInfo from "../components/BuildInfo.vue";
 import TextField from "../components/TextField.vue";
 import { showError } from "../lib/feedback";
 import { signIn } from "../session";
+import { pathAfterSignIn } from "../router";
 
 const iconUrl = `${import.meta.env.BASE_URL}apple-touch-icon-180x180.png`;
 const router = useIonRouter();
@@ -141,7 +142,7 @@ async function submit() {
       await signIn(name, password.value, rememberMe.value);
     }
     password.value = "";
-    router.navigate("/lists", "root", "replace");
+    router.navigate(pathAfterSignIn(), "root", "replace");
   } catch (error) {
     await showError(error, mode.value === "signIn" ? "Couldn't Sign In" : "Couldn't Create Account");
   } finally {

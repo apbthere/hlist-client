@@ -42,6 +42,10 @@
         <ion-icon slot="start" :icon="desktopOutline" color="primary" />
         <ion-label>Use Desktop Version</ion-label>
       </ion-item>
+      <ion-item button :detail="true" href="/app/add">
+        <ion-icon slot="start" :icon="globeOutline" color="primary" />
+        <ion-label>Add from Store Websites</ion-label>
+      </ion-item>
     </ion-list>
 
     <ion-list :inset="true" class="sign-out">
@@ -60,7 +64,7 @@ import {
   IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonTitle, IonToolbar,
   actionSheetController, alertController,
 } from "@ionic/vue";
-import { desktopOutline, personCircle } from "ionicons/icons";
+import { desktopOutline, globeOutline, personCircle } from "ionicons/icons";
 import * as hlist from "../api/hlist";
 import BuildInfo from "./BuildInfo.vue";
 import TextField from "./TextField.vue";

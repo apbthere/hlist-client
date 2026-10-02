@@ -91,7 +91,7 @@
     <ion-footer :translucent="true" class="ion-no-border">
       <ion-toolbar>
         <ion-buttons slot="start">
-          <ion-button class="bar-action" :disabled="!loaded || !list" @click="add">
+          <ion-button class="bar-action" :disabled="!loaded || !list" @click="add()">
             <ion-icon slot="start" :icon="addCircle" />
             New Item
           </ion-button>
@@ -113,6 +113,7 @@
         :previous-items="previousItems"
         :departments="departments"
         :brands="brands"
+        :from-page="editing ? undefined : fromPage ?? undefined"
         @close="editorOpen = false"
         @saved="afterSave"
       />
@@ -141,6 +142,7 @@ import { storeIconUrl } from "../lib/stores";
 import { countToBuy, groupByDepartment } from "../lib/items";
 import { cachedList, findList, forgetList } from "../lib/listCache";
 import { debounced, subscribe } from "../lib/live";
+import { takePendingProduct, type ProductFromPage } from "../lib/addFromPage";
 
 /** How long a just-checked item stays in place before moving to Completed, as in Reminders. */
 const SETTLE_MS = 900;
@@ -240,6 +242,8 @@ async function load(): Promise<void> {
     }
     list.value = found;
     loaded.value = true;
+    const product = takePendingProduct(props.listId);
+    if (product) add(product);
   } catch (error) {
     await showError(error, "Couldn't Load List");
   }
@@ -335,13 +339,18 @@ async function remove(item: ListItem, sliding?: HTMLIonItemSlidingElement): Prom
   }
 }
 
-function add(): void {
+/** A product being added from a store's web page (see AddFromPage), filled into the New Item sheet. */
+const fromPage = ref<ProductFromPage | null>(null);
+
+function add(product: ProductFromPage | null = null): void {
+  fromPage.value = product;
   editing.value = null;
   editorKey.value++;
   editorOpen.value = true;
 }
 
 function edit(item: ListItem): void {
+  fromPage.value = null;
   editing.value = item;
   editorKey.value++;
   editorOpen.value = true;

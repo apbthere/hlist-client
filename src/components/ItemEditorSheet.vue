@@ -190,6 +190,7 @@ import {
   thumbnailUrl,
 } from "../lib/photos";
 import { capitalizeWords, findCatalogMatch, normalizeItemName, parseItemPattern, suggestItems } from "../lib/items";
+import type { ProductFromPage } from "../lib/addFromPage";
 
 type CatalogType = "department" | "brand";
 
@@ -203,6 +204,8 @@ const props = defineProps<{
   /** Shared with the list screen; new entries are added in place. */
   departments: Map<number, string>;
   brands: Map<number, string>;
+  /** A product from a store's web page to fill in (new items only); see AddFromPage. */
+  fromPage?: ProductFromPage;
 }>();
 
 const emit = defineEmits<{ close: []; saved: [] }>();
@@ -707,11 +710,47 @@ async function save(): Promise<void> {
   }
 }
 
+/** The brand from your list that the product's name starts with ("Publix Whole Milk" → Publix), if any. */
+function leadingBrand(productName: string): string | null {
+  const lower = productName.toLowerCase();
+  let found: string | null = null;
+  for (const brand of props.brands.values()) {
+    if (lower.startsWith(`${brand.toLowerCase()} `) && brand.length > (found?.length ?? 0)) found = brand;
+  }
+  return found;
+}
+
+/**
+ * Fills in a product from a store's page: the name without its leading brand, the brand (the page's, or one of
+ * yours the name starts with), the store's section as the department, the size as notes, and the photo.
+ */
+async function fillFromPage(product: ProductFromPage): Promise<void> {
+  const brand = product.brand ?? leadingBrand(product.name);
+  let itemName = product.name;
+  if (brand && itemName.toLowerCase().startsWith(`${brand.toLowerCase()} `)) {
+    itemName = itemName.slice(brand.length).replace(/^[\s,:–—-]+/, "") || product.name;
+  }
+  name.value = itemName;
+  if (product.size && !comment.value) comment.value = product.size;
+  try {
+    if (brand) brandId.value = await resolveCatalog("brand", brand);
+    if (product.section) departmentId.value = await resolveCatalog("department", product.section);
+  } catch (error) {
+    await showError(error, "Couldn't Fill In the Item");
+  }
+  if (product.photo) await importPicture(product.photo);
+  else if (product.link) await importPicture(product.link, true);
+}
+
 onMounted(() => {
   // Keeps the "New" markers in the live preview accurate; failures just leave the loaded catalog.
   void Promise.all([refreshCatalog("brand"), refreshCatalog("department")]).catch(() => {});
-  // Wait for the sheet animation; iOS may still decline to show the keyboard without a tap.
-  if (!props.item) setTimeout(() => void nameInput.value?.$el.setFocus(), 450);
+  if (!props.item && props.fromPage) {
+    void fillFromPage(props.fromPage);
+  } else if (!props.item) {
+    // Wait for the sheet animation; iOS may still decline to show the keyboard without a tap.
+    setTimeout(() => void nameInput.value?.$el.setFocus(), 450);
+  }
 });
 </script>
 
