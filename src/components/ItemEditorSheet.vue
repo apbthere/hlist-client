@@ -83,6 +83,25 @@
           />
           <ion-button slot="end" fill="clear" @click="pasteBoxOpen = false">Cancel</ion-button>
         </ion-item>
+        <ion-item v-if="showSuggestions" class="suggested-photos" lines="full">
+          <div class="suggested">
+            <div class="suggested-title">Tap a photo to use it</div>
+            <div class="suggested-strip">
+              <button
+                v-for="suggestion in photoSuggestions"
+                :key="suggestion.thumbnailUrl"
+                type="button"
+                class="suggested-photo"
+                :aria-label="`Use photo of ${suggestion.name}${suggestion.brand ? ` by ${suggestion.brand}` : ''}`"
+                @click="useSuggestedPhoto(suggestion)"
+              >
+                <img :src="suggestion.thumbnailUrl" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                <span>{{ suggestion.name }}</span>
+              </button>
+            </div>
+            <div class="suggested-source">Photos from Open Food Facts</div>
+          </div>
+        </ion-item>
         <ion-item button :detail="false" :disabled="photoBusy" @click="choosePhoto">
           <ion-icon slot="start" :icon="cameraOutline" color="primary" />
           <ion-label color="primary">{{ photoId !== null ? "Replace Photo" : "Add Photo" }}</ion-label>
@@ -92,6 +111,9 @@
           <ion-label color="danger">Remove Photo</ion-label>
         </ion-item>
       </ion-list>
+      <p v-if="!item && photoId === null && !photoBusy" class="section-footer">
+        Tip: paste a product’s link into the name (Share → Copy on the store’s page) to fill in its name, brand and photo.
+      </p>
       <input ref="cameraInput" class="file-input" type="file" accept="image/*" capture="environment" @change="onFileChosen" />
       <input ref="libraryInput" class="file-input" type="file" accept="image/*" @change="onFileChosen" />
 
@@ -143,7 +165,7 @@
           <ion-textarea v-model="comment" aria-label="Notes" placeholder="e.g. Unsweetened, family size" :auto-grow="true" :maxlength="1000" />
         </ion-item>
       </ion-list>
-      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department, or just “Milk by Horizon” or “Milk in Dairy”. Or paste a product’s link (Share → Copy on the store’s page) to fill in its name, brand and photo.</p>
+      <p v-if="!item" class="section-footer">Tip: type “Milk by Horizon in Dairy” to fill in the brand and department, or just “Milk by Horizon” or “Milk in Dairy”.</p>
     </form>
   </ion-content>
 
@@ -153,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonSelect,
   IonModal, IonSelectOption, IonSpinner, IonTextarea, IonTitle, IonToolbar, actionSheetController, alertController,
@@ -165,7 +187,7 @@ import PhotoViewer from "./PhotoViewer.vue";
 import { promptForText, showError } from "../lib/feedback";
 import {
   canReadClipboard, linkFromPaste, pastedLinkOnly, photoUrl, pictureFromPaste, prepareForUpload, readClipboardLink, readClipboardPicture,
-  thumbnailUrl, webAddressIn,
+  thumbnailUrl,
 } from "../lib/photos";
 import { capitalizeWords, findCatalogMatch, normalizeItemName, parseItemPattern, suggestItems } from "../lib/items";
 
@@ -219,7 +241,6 @@ async function choosePhoto(): Promise<void> {
       { text: "Take Photo", handler: () => { cameraInput.value?.click(); } },
       { text: "Choose from Photos", handler: () => { libraryInput.value?.click(); } },
       { text: "Paste Image", handler: () => { void pastePhoto(); } },
-      { text: "From Web Link", handler: () => { void photoFromLink(); } },
       { text: "Cancel", role: "cancel" },
     ],
   });
@@ -274,20 +295,6 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
   } else {
     await showError("What was pasted isn't a picture or a web link. On the store's website, touch and hold the product photo and tap Copy, then paste here again.", "Not a Picture");
   }
-}
-
-/** Asks for a product page's link (Share → Copy on the store's page) or a picture's address. */
-async function photoFromLink(): Promise<void> {
-  const link = await promptForText({
-    header: "Photo from Web Link",
-    message: "Paste the link to the product's page, or to the picture itself.",
-    placeholder: "https://",
-    confirmText: "Add",
-    inputType: "url",
-  });
-  if (!link) return;
-  const address = webAddressIn(link) ?? link;
-  await importPicture(address);
 }
 
 /**
@@ -363,6 +370,58 @@ const suggestionPicked = ref(false);
 /** Whether the user is still working on the name; suggestions show only then. */
 const nameActive = ref(false);
 let leaveNameTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Photos of matching products, offered under Photo once a name has been entered and the item has no photo. The
+ * search runs after leaving the name (and again when the brand changes); nothing is attached until one is tapped.
+ */
+const photoSuggestions = ref<hlist.PhotoSuggestion[]>([]);
+const showSuggestions = computed(() => photoId.value === null && !photoBusy.value && photoSuggestions.value.length > 0);
+let suggestionSearch = 0;
+let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** The name and brand to search for, taking "Milk by Horizon" shortcuts into account; null while typing. */
+const photoSearch = computed(() => {
+  if (nameActive.value || photoId.value !== null) return null;
+  const parsed = parseItemPattern(name.value);
+  const itemName = (parsed?.itemName ?? name.value).trim();
+  const brand = parsed?.brandName ?? (brandId.value === null ? null : props.brands.get(brandId.value) ?? null);
+  return itemName.length >= 2 ? { itemName, brand } : null;
+});
+
+watch(() => (photoSearch.value ? `${photoSearch.value.itemName}|${photoSearch.value.brand ?? ""}` : null), (key) => {
+  clearTimeout(suggestionTimer);
+  const search = photoSearch.value;
+  if (!key || !search) return;
+  const current = ++suggestionSearch;
+  suggestionTimer = setTimeout(async () => {
+    try {
+      const found = await hlist.findPhotos(search.itemName, search.brand);
+      if (current === suggestionSearch) photoSuggestions.value = found;
+    } catch {
+      // Suggestions are optional; the other ways to add a photo still work.
+    }
+  }, 400);
+}, { immediate: true });
+
+/** Downloads the chosen product photo at full size (falling back to the small one) and uses it. */
+async function useSuggestedPhoto(suggestion: hlist.PhotoSuggestion): Promise<void> {
+  photoBusy.value = true;
+  try {
+    let imported: hlist.PhotoInfo;
+    try {
+      imported = await hlist.importPhoto(suggestion.imageUrl);
+    } catch {
+      imported = await hlist.importPhoto(suggestion.thumbnailUrl);
+    }
+    setPreview(null);
+    photoId.value = imported.photoId;
+  } catch (error) {
+    await showError(error, "Couldn't Add Photo");
+  } finally {
+    photoBusy.value = false;
+  }
+}
 
 const canSave = computed(() => name.value.trim() !== "");
 const departmentChoice = computed(() => (departmentId.value === null ? "none" : String(departmentId.value)));
@@ -657,6 +716,81 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.suggested-photos {
+  --padding-start: 16px;
+  --inner-padding-end: 0;
+}
+
+.suggested {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 0;
+}
+
+.suggested-title,
+.suggested-source {
+  color: var(--hlist-secondary-label);
+  font-size: 13px;
+}
+
+.suggested-source {
+  padding-right: 16px;
+  font-size: 11px;
+  text-align: right;
+}
+
+.suggested-strip {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0 6px;
+  padding-right: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.suggested-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.suggested-photo {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 84px;
+  padding: 0;
+  border: 0;
+  color: var(--ion-text-color);
+  background: none;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: left;
+  scroll-snap-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.suggested-photo img {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 0.5px var(--hlist-separator);
+}
+
+.suggested-photo span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.suggested-photo:active img {
+  opacity: 0.6;
+}
+
 .photo-thumb {
   display: grid;
   place-items: center;

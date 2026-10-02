@@ -114,6 +114,20 @@ export function importPhoto(url: string): Promise<ImportedPhoto> {
   return request("/api/photos/import", { method: "POST", body: { url } });
 }
 
+/** A product photo found by name and brand (from Open Food Facts); attach it with importPhoto(imageUrl). */
+export interface PhotoSuggestion {
+  name: string;
+  brand: string | null;
+  thumbnailUrl: string;
+  imageUrl: string;
+}
+
+export function findPhotos(name: string, brand?: string | null): Promise<PhotoSuggestion[]> {
+  const query = new URLSearchParams({ name });
+  if (brand) query.set("brand", brand);
+  return request(`/api/photos/suggestions?${query}`);
+}
+
 export function setItemPhoto(itemId: number, photoId: number): Promise<void> {
   return request(`/api/items/${itemId}/photo`, { method: "PUT", body: { photoId } });
 }

@@ -3,7 +3,7 @@ import {
   canReadClipboard, linkFromPaste, pastedLinkOnly, photoUrl, pictureFromPaste, readClipboardPicture, thumbnailUrl,
   webAddressIn,
 } from "../src/lib/photos";
-import { importPhoto, uploadPhoto } from "../src/api/hlist";
+import { findPhotos, importPhoto, uploadPhoto } from "../src/api/hlist";
 
 describe("photo addresses", () => {
   it("point at the server's photo and thumbnail", () => {
@@ -149,5 +149,20 @@ describe("pasting into the item name", () => {
   it("pastes ordinary text as text", () => {
     expect(pastedLinkOnly(pasteOf({ "text/plain": "Greek yogurt" }))).toBeNull();
     expect(pastedLinkOnly(pasteOf({ "text/plain": "Bites https://www.costco.com/p/1", "text/uri-list": "https://www.costco.com/p/1" }))).toBeNull();
+  });
+});
+
+describe("findPhotos", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("searches by name and, when given, brand", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await findPhotos("Whole milk", "Publix");
+    await findPhotos("Bananas & more", null);
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/photos/suggestions?name=Whole+milk&brand=Publix");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/photos/suggestions?name=Bananas+%26+more");
   });
 });
