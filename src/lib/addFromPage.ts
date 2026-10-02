@@ -19,11 +19,11 @@ export interface ProductFromPage {
 }
 
 /**
- * The script that runs on the product page (as a bookmark it starts with "javascript:"). It reads the product's
- * name (the page's main heading, else its og:title without " | Store name") and photo (og:image). On Publix it
- * also reads the store section shown above the name and the size below it, which appear once a store is chosen.
- * It's written against the page's layout rather than the site's internal names, so small site changes don't
- * break it. Kept to plain ES5-style code so it runs anywhere.
+ * The script that runs on the product page (as a bookmark it starts with "javascript:"). It only collects: the
+ * product's name (the page's main heading, else its og:title without " | Store name"), photo (og:image), and the
+ * text just above and just below the name. What that text means is decided by productFromQuery, in HList, so
+ * changes to it don't need the bookmark or Shortcut set up again. It's written against the page's layout rather
+ * than the site's internal names, so small site changes don't break it.
  */
 function readProductPage(): string {
   const meta = (key: string): string => {
@@ -31,23 +31,19 @@ function readProductPage(): string {
     return (tag?.getAttribute("content") ?? "").trim();
   };
   const text = (element: Element | null): string =>
-    ((element as HTMLElement | null)?.innerText ?? element?.textContent ?? "").replace(/\s+/g, " ").trim();
+    ((element as HTMLElement | null)?.innerText ?? element?.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
   const heading = document.querySelector("main h1, h1");
   let name = text(heading);
-  if (!name) name = (meta("og:title") || document.title).replace(/\s+[|–—-]\s+[^|–—]+$/, "").trim();
+  if (!name) name = (meta("og:title") || document.title).replace(/\s+[|\u2013\u2014-]\s+[^|\u2013\u2014]+$/, "").trim();
   const found: Record<string, string> = { name, photo: meta("og:image"), link: location.href };
-  if (/(^|\.)publix\.com$/.test(location.hostname) && heading) {
-    // The short label just above the name (with a pin icon) is the product's section in the chosen store.
-    for (let node: Element | null = heading, depth = 0; node && depth < 3 && !found.section; node = node.parentElement, depth++) {
-      for (let before = node.previousElementSibling; before && !found.section; before = before.previousElementSibling) {
-        const label = text(before);
-        if (label && label.length <= 30 && !/back/i.test(label)) found.section = label;
-        if (label) break;
+  if (heading) {
+    // The nearest text before the name, looking up to three levels out (Publix: the store section label).
+    for (let node: Element | null = heading, depth = 0; node && depth < 3 && !found.above; node = node.parentElement, depth++) {
+      for (let before = node.previousElementSibling; before && !found.above; before = before.previousElementSibling) {
+        found.above = text(before);
       }
     }
-    const after = text(heading.nextElementSibling);
-    if (after && after.length <= 30 && /\d/.test(after)) found.size = after;
-    if (/^publix\s/i.test(name)) found.brand = "Publix";
+    found.below = text(heading.nextElementSibling);
   }
   const query = Object.keys(found).filter((key) => found[key]).map((key) => `${key}=${encodeURIComponent(found[key])}`).join("&");
   return `__HLIST__/app/add?${query}`;
@@ -63,12 +59,25 @@ export function shortcutScript(origin: string): string {
   return `completion((${readProductPage.toString()})().replace("__HLIST__", ${JSON.stringify(origin)}));`;
 }
 
-/** The product details from /add's query, or null without a name. Addresses must be web addresses. */
+function isPublix(link: string | undefined): boolean {
+  try {
+    return link !== undefined && /(^|\.)publix\.com$/i.test(new URL(link).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The product details from /add's query, or null without a name. Addresses must be web addresses. On Publix, with
+ * a store chosen, the text above the name is the product's place in that store ("Aisle 3 - International Foods -
+ * Mexican", "Meat") and the text below it the size ("24 tortillas [16 oz (1 lb) 453 g]"); Publix's own products
+ * are brand Publix. (Bookmarks set up before October 2026 send section, size and brand themselves.)
+ */
 export function productFromQuery(query: Record<string, unknown>): ProductFromPage | null {
   const value = (key: string, max: number): string | undefined => {
     const raw = query[key];
     const text = (Array.isArray(raw) ? raw[0] : raw);
-    return typeof text === "string" && text.trim() ? text.trim().slice(0, max) : undefined;
+    return typeof text === "string" && text.trim() ? text.trim().replace(/\s+/g, " ").slice(0, max) : undefined;
   };
   const address = (key: string): string | undefined => {
     const text = value(key, 2000);
@@ -76,7 +85,18 @@ export function productFromQuery(query: Record<string, unknown>): ProductFromPag
   };
   const name = value("name", 255);
   if (!name) return null;
-  return { name, photo: address("photo"), section: value("section", 60), size: value("size", 60), brand: value("brand", 60), link: address("link") };
+  const link = address("link");
+  let section = value("section", 100);
+  let size = value("size", 100);
+  let brand = value("brand", 60);
+  if (isPublix(link)) {
+    const above = value("above", 200);
+    const below = value("below", 200);
+    if (!section && above && above.length <= 100 && !/^back$/i.test(above)) section = above;
+    if (!size && below && below.length <= 100 && /\d/.test(below)) size = below;
+    if (!brand && /^publix\s/i.test(name)) brand = "Publix";
+  }
+  return { name, photo: address("photo"), section, size, brand, link };
 }
 
 /** Whether a list is for the store whose site the product came from (publix.com → a "Publix" list). */

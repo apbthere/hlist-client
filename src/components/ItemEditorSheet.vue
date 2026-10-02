@@ -721,6 +721,29 @@ function leadingBrand(productName: string): string | null {
 }
 
 /**
+ * The department for a store's section label ("Aisle 3 - International Foods - Mexican"): the department with
+ * exactly that name, else a new one. Unlike typed names, labels must match exactly, since aisles differ only in
+ * their number and name ("Aisle 3 - …" and "Aisle 7 - …" would otherwise be taken for each other).
+ */
+async function resolveStoreSection(label: string): Promise<number> {
+  const exact = (): number | null => {
+    for (const [id, departmentName] of props.departments) {
+      if (departmentName.toLowerCase() === label.toLowerCase()) return id;
+    }
+    return null;
+  };
+  let existing = exact();
+  if (existing === null) {
+    await refreshCatalog("department");
+    existing = exact();
+  }
+  if (existing !== null) return existing;
+  const department = await hlist.createDepartment(label);
+  props.departments.set(department.departmentId, department.departmentName);
+  return department.departmentId;
+}
+
+/**
  * Fills in a product from a store's page: the name without its leading brand, the brand (the page's, or one of
  * yours the name starts with), the store's section as the department, the size as notes, and the photo.
  */
@@ -734,7 +757,7 @@ async function fillFromPage(product: ProductFromPage): Promise<void> {
   if (product.size && !comment.value) comment.value = product.size;
   try {
     if (brand) brandId.value = await resolveCatalog("brand", brand);
-    if (product.section) departmentId.value = await resolveCatalog("department", product.section);
+    if (product.section) departmentId.value = await resolveStoreSection(product.section);
   } catch (error) {
     await showError(error, "Couldn't Fill In the Item");
   }

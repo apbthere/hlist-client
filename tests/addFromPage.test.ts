@@ -24,18 +24,38 @@ const PUBLIX_PAGE = `<html><head>
 </main></body></html>`;
 
 describe("the store page script", () => {
-  it("reads a Publix product's name, photo, store section, size and brand", () => {
+  it("sends a product's name, photo and the text around the name", () => {
     const url = runOnPage(PUBLIX_PAGE, "https://www.publix.com/pd/publix-mild-pork-italian-sausage/RIO-PCI-1");
 
     expect(url.origin + url.pathname).toBe("https://hlist.test/app/add");
     expect(Object.fromEntries(url.searchParams)).toEqual({
       name: "Publix Mild Pork Italian Sausage, Our Exclusive Recipe",
       photo: "https://images.publixcdn.com/pct/images/products/1/sausage-600x600-A.jpg",
-      section: "Meat",
-      size: "20 oz Pkg",
-      brand: "Publix",
+      above: "Meat",
+      below: "20 oz Pkg",
       link: "https://www.publix.com/pd/publix-mild-pork-italian-sausage/RIO-PCI-1",
     });
+  });
+
+  it("turns a Publix page's text into the store section, size and brand", () => {
+    const url = runOnPage(PUBLIX_PAGE.replace("Meat", "Aisle 3 - International Foods - Mexican")
+      .replace("Publix Mild Pork Italian Sausage, Our Exclusive Recipe</h1>", "Mission Super Soft Extra Thin Yellow Corn Tortillas</h1>")
+      .replace("20 oz Pkg", "24 tortillas [16 oz (1 lb) 453 g]"), "https://www.publix.com/pd/mission-tortillas/RIO-PCI-2");
+
+    expect(productFromQuery(Object.fromEntries(url.searchParams))).toMatchObject({
+      name: "Mission Super Soft Extra Thin Yellow Corn Tortillas",
+      section: "Aisle 3 - International Foods - Mexican",
+      size: "24 tortillas [16 oz (1 lb) 453 g]",
+      brand: undefined,
+    });
+    expect(productFromQuery(Object.fromEntries(runOnPage(PUBLIX_PAGE, "https://www.publix.com/pd/x").searchParams)))
+      .toMatchObject({ section: "Meat", size: "20 oz Pkg", brand: "Publix" });
+  });
+
+  it("uses the text around the name only on Publix", () => {
+    const url = runOnPage(PUBLIX_PAGE, "https://www.example.com/p/sausage");
+
+    expect(productFromQuery(Object.fromEntries(url.searchParams))).toMatchObject({ section: undefined, size: undefined, brand: undefined });
   });
 
   it("reads only the name and photo elsewhere, falling back to the page title", () => {
