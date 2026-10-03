@@ -10,6 +10,7 @@ under `/app/` on the same origin as `/api`. `README.md` covers setup and install
 npm test            # Vitest (jsdom), about 60 tests
 npm run typecheck   # vue-tsc
 npm run build       # type-check + build to dist/ (the server serves dist/ directly; no restart needed)
+npm run e2e         # build, then browser tests in e2e/ against a throwaway server (about 15 s; see below)
 npm run dev         # http://localhost:5173/app/, proxies /api to localhost:8080 (HLIST_SERVER to change)
 ```
 
@@ -91,13 +92,20 @@ publix.com blocks the server (Akamai), so the user's own browser reads the page.
 
 ## Testing in a real browser engine
 
-- Playwright's WebKit (`playwright-core`) is the closest to Safari. Drive it against a throwaway server on port
-  18080 with its own `H2_DB_PATH`, so the real local data stays clean. Create a user and log in via `fetch` in
-  `page.evaluate`. Ionic overlays are `ion-modal.show-modal`, `ion-action-sheet button` and `ion-alert`.
-- Passkeys can't be tested in WebKit (no virtual authenticator). Use Playwright's Chromium with the CDP
-  `WebAuthn.addVirtualAuthenticator` (`internal`, resident key, user verified, `automaticPresenceSimulation`).
-  It answers the AutoFill request at once, so the sign-in page signs in by itself; to test the button, make
-  `PublicKeyCredential.isConditionalMediationAvailable` return false in an init script.
+- `e2e/` (`npm run e2e`, Node's test runner + `playwright-core`): each `*.test.mjs` starts a throwaway server
+  with `e2e/harness.mjs`. That's the packaged `../server/target` jar (run `./mvnw -q -DskipTests package` there
+  after server changes), on port 18080 with a database in a temporary folder, serving this repo's `dist/`.
+- To check a UI change, add a test there or a scratch script that imports the harness:
+  - `startServer()` and `openBrowser({ engine, device: iPad | mac })`, which collects page errors in `errors`.
+  - `signUp(page)`: creates a user and signs in. `apiFetch(page, path, { method, body })`: requests with CSRF.
+  - `screenshot(page, name)`: saves to `e2e/output/` (git-ignored). Look at the screenshots.
+- WebKit (the default engine) is the closest to Safari. Ionic overlays are `ion-modal.show-modal`,
+  `ion-action-sheet button` and `ion-alert`. `ion-button[type=submit]` doesn't match; use a class or text.
+- Close every browser even when a step fails (`try`/`finally` or `afterEach`): one left open keeps node
+  running, and the run hangs instead of reporting the failure.
+- Passkeys can't be tested in WebKit (no virtual authenticator). Use Chromium with
+  `addPasskeyAuthenticator(context, page)`. It answers the AutoFill request at once, so the sign-in page signs
+  in by itself; `{ autofill: false }` tests the button instead. `e2e/passkeys.test.mjs` shows both.
 - iOS simulators: Xcode 27 has no Simulator.app; the simulators run in **DeviceHub**. `xcrun simctl` boots them
   and takes screenshots. `safaridriver -p 4444` with `safari:useSimulator` drives iOS Safari for navigation,
   scripts and screenshots. Its synthetic taps and typing don't reach Ionic controls there, so click and fill
