@@ -63,6 +63,9 @@ export default defineConfig({
     host: true,
     proxy: {
       "/api": { target: apiServer },
+      // Passkey sign-in and registration (Spring Security's endpoints).
+      "/webauthn": { target: apiServer },
+      "/login/webauthn": { target: apiServer },
     },
   },
 });

@@ -7,7 +7,7 @@ under `/app/` on the same origin as `/api`. `README.md` covers setup and install
 ## Commands
 
 ```sh
-npm test            # Vitest (jsdom), about 50 tests
+npm test            # Vitest (jsdom), about 60 tests
 npm run typecheck   # vue-tsc
 npm run build       # type-check + build to dist/ (the server serves dist/ directly; no restart needed)
 npm run dev         # http://localhost:5173/app/, proxies /api to localhost:8080 (HLIST_SERVER to change)
@@ -21,6 +21,7 @@ CI (`.github/workflows/ci.yml`) runs typecheck, tests and `vite build`. There is
   bodies, `X-HList-Client` id for live updates), `hlist.ts` (typed endpoints), `types.ts`.
 - `src/router.ts`: `/login`, `/lists`, `/lists/:id`, `/add`. A guard requires sign-in. `/add` survives a sign-in
   through `sessionStorage` (`pathAfterSignIn`).
+- `src/session.ts`: `signIn`, `passkeySignIn`, `signOut`.
 - `src/views/`: `ListsPage`, `ListItemsPage` (department groups, live updates, photo viewer),
   `AddFromPage` (/add: see "Adding from store websites"), `LoginPage`.
 - `src/components/ItemEditorSheet.vue`: the New/Edit Item sheet, the most involved component.
@@ -34,6 +35,11 @@ CI (`.github/workflows/ci.yml`) runs typecheck, tests and `vite build`. There is
   - `photos.ts`: upload preparation (canvas, HEIC → JPEG, 1600 px), clipboard and paste parsing, prefetching.
   - `addFromPage.ts`: the store-page script and /add logic.
   - `live.ts`: SSE client. `listCache.ts`. `stores.ts`: store icons. `feedback.ts`: alerts and prompts.
+  - `passkeys.ts`: Face ID / Touch ID sign-in (WebAuthn JSON ↔ `navigator.credentials`). Shown only where
+    `passkeysAvailable()` (secure context and an origin the server lists). The sign-in page offers passkeys in
+    the username field's AutoFill (`autocomplete="username webauthn"`, a waiting conditional request) and with a
+    button, and after a password sign-in offers once to save one. The Account sheet lists, adds and removes them.
+    One request at a time: starting one aborts the previous (a pending AutoFill request blocks the browser).
 - `src/theme/variables.css`: iOS grouped colours, light and dark, and the green tint. Sheets get their background
   from `ion-modal` rules; the light rule must come before the dark-mode block.
 - `vite.config.ts`: PWA (Workbox). Runtime caches: store icons (stale-while-revalidate) and `item-photos`
@@ -88,6 +94,10 @@ publix.com blocks the server (Akamai), so the user's own browser reads the page.
 - Playwright's WebKit (`playwright-core`) is the closest to Safari. Drive it against a throwaway server on port
   18080 with its own `H2_DB_PATH`, so the real local data stays clean. Create a user and log in via `fetch` in
   `page.evaluate`. Ionic overlays are `ion-modal.show-modal`, `ion-action-sheet button` and `ion-alert`.
+- Passkeys can't be tested in WebKit (no virtual authenticator). Use Playwright's Chromium with the CDP
+  `WebAuthn.addVirtualAuthenticator` (`internal`, resident key, user verified, `automaticPresenceSimulation`).
+  It answers the AutoFill request at once, so the sign-in page signs in by itself; to test the button, make
+  `PublicKeyCredential.isConditionalMediationAvailable` return false in an init script.
 - iOS simulators: Xcode 27 has no Simulator.app; the simulators run in **DeviceHub**. `xcrun simctl` boots them
   and takes screenshots. `safaridriver -p 4444` with `safari:useSimulator` drives iOS Safari for navigation,
   scripts and screenshots. Its synthetic taps and typing don't reach Ionic controls there, so click and fill

@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import * as hlist from "./api/hlist";
 import { disconnect as disconnectLiveUpdates } from "./lib/live";
+import { signInWithPasskey } from "./lib/passkeys";
 import { clearCachedPhotos } from "./lib/photos";
 import type { User } from "./api/types";
 
@@ -20,6 +21,13 @@ export async function ensureUser(): Promise<User | null> {
 
 export async function signIn(username: string, password: string, rememberMe: boolean): Promise<void> {
   await hlist.login(username, password, rememberMe);
+  currentUser.value = await hlist.currentUser();
+  checked = true;
+}
+
+/** Signs in with a passkey; with `autofill`, waits for the person to pick it in the username field's AutoFill. */
+export async function passkeySignIn(rememberMe: boolean | (() => boolean), autofill = false): Promise<void> {
+  await signInWithPasskey(rememberMe, autofill);
   currentUser.value = await hlist.currentUser();
   checked = true;
 }

@@ -19,6 +19,28 @@
       </ion-item>
     </ion-list>
 
+    <template v-if="passkeysOn">
+      <div class="section-header">Passkeys</div>
+      <ion-list :inset="true">
+        <ion-item v-for="passkey in passkeys" :key="passkey.id" button :detail="false" @click="confirmRemove(passkey)">
+          <ion-icon slot="start" :icon="keyOutline" color="primary" />
+          <ion-label>
+            <h3>{{ passkey.label }}</h3>
+            <p>
+              Added {{ formatDate(passkey.created) }}<template v-if="usedSinceAdded(passkey)"> · Last used {{ formatDate(passkey.lastUsed) }}</template>
+            </p>
+          </ion-label>
+        </ion-item>
+        <ion-item button :detail="false" :disabled="adding" @click="add()">
+          <ion-label color="primary">{{ adding ? "Saving…" : "Add Passkey" }}</ion-label>
+        </ion-item>
+      </ion-list>
+      <p class="section-footer">
+        Sign in with Face ID or Touch ID instead of your password. A passkey saved in iCloud Keychain works on all
+        your Apple devices.
+      </p>
+    </template>
+
     <div class="section-header">Change Password</div>
     <form @submit.prevent="changePassword">
       <!-- Hidden username field so Keychain updates the right saved password. -->
@@ -59,16 +81,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import {
   IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonTitle, IonToolbar,
   actionSheetController, alertController,
 } from "@ionic/vue";
-import { desktopOutline, globeOutline, personCircle } from "ionicons/icons";
+import { desktopOutline, globeOutline, keyOutline, personCircle } from "ionicons/icons";
 import * as hlist from "../api/hlist";
 import BuildInfo from "./BuildInfo.vue";
 import TextField from "./TextField.vue";
 import { showError } from "../lib/feedback";
+import { formatDate } from "../lib/format";
+import {
+  type Passkey, addPasskey, deletePasskey, getPasskeys, passkeysAvailable, wasCancelled,
+} from "../lib/passkeys";
 import { currentUser, signOut } from "../session";
 
 const emit = defineEmits<{ close: []; signedOut: [] }>();
@@ -78,6 +104,59 @@ const newPassword = ref("");
 const busy = ref(false);
 const currentField = ref<InstanceType<typeof TextField> | null>(null);
 const newField = ref<InstanceType<typeof TextField> | null>(null);
+
+/** Shown only where passkeys work (the server's public address or localhost). */
+const passkeysOn = ref(false);
+const passkeys = ref<Passkey[]>([]);
+const adding = ref(false);
+
+onMounted(async () => {
+  if (!await passkeysAvailable()) return;
+  try {
+    passkeys.value = await getPasskeys();
+    passkeysOn.value = true;
+  } catch {
+    // Leave the section out; the rest of the sheet still works.
+  }
+});
+
+/** The server sets "last used" when a passkey is saved; only show it once it has signed in. */
+function usedSinceAdded(passkey: Passkey): boolean {
+  if (!passkey.lastUsed || !passkey.created) return Boolean(passkey.lastUsed);
+  return Date.parse(passkey.lastUsed) - Date.parse(passkey.created) > 60_000;
+}
+
+async function add(): Promise<void> {
+  if (adding.value) return;
+  adding.value = true;
+  try {
+    await addPasskey();
+    passkeys.value = await getPasskeys();
+  } catch (error) {
+    if (!wasCancelled(error)) await showError(error, "Couldn't Save Passkey");
+  } finally {
+    adding.value = false;
+  }
+}
+
+async function confirmRemove(passkey: Passkey): Promise<void> {
+  const sheet = await actionSheetController.create({
+    header: `"${passkey.label}" will no longer sign in to HList. To delete it from your devices too, use the Passwords app.`,
+    buttons: [
+      { text: "Remove Passkey", role: "destructive" },
+      { text: "Cancel", role: "cancel" },
+    ],
+  });
+  await sheet.present();
+  const { role } = await sheet.onDidDismiss();
+  if (role !== "destructive") return;
+  try {
+    await deletePasskey(passkey.id);
+    passkeys.value = passkeys.value.filter((entry) => entry.id !== passkey.id);
+  } catch (error) {
+    await showError(error, "Couldn't Remove Passkey");
+  }
+}
 
 async function changePassword(): Promise<void> {
   if (busy.value) return;
@@ -108,7 +187,9 @@ async function changePassword(): Promise<void> {
 
 async function confirmSignOut(): Promise<void> {
   const sheet = await actionSheetController.create({
-    header: "You'll need your password to sign back in on this device.",
+    header: passkeys.value.length > 0
+      ? "You'll need a passkey or your password to sign back in on this device."
+      : "You'll need your password to sign back in on this device.",
     buttons: [
       { text: "Sign Out", role: "destructive" },
       { text: "Cancel", role: "cancel" },
