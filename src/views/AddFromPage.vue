@@ -1,8 +1,8 @@
 <template>
   <!--
     /add: adds the product from a store's web page. The "Add to HList" bookmark (Mac) or Shortcut (iPad) opens it
-    with the product's details; it picks the list (the newest open list for that store) and opens its New Item
-    sheet filled in. Opened without details, it explains how to set up the bookmark and Shortcut.
+    with the product's details; it picks the list (the newest open list for that store, or a new list named after the
+    store when there is none) and opens its New Item sheet filled in. Opened without details, it explains how to set up the bookmark and Shortcut.
   -->
   <ion-page>
     <ion-header :translucent="true">
@@ -88,7 +88,9 @@ import {
 import * as hlist from "../api/hlist";
 import type { ShoppingList } from "../api/types";
 import StoreBadge from "../components/StoreBadge.vue";
-import { bookmarklet, defaultList, newestFirst, productFromQuery, setPendingProduct, shortcutScript } from "../lib/addFromPage";
+import {
+  bookmarklet, defaultList, newestFirst, productFromQuery, setPendingProduct, shortcutScript, storeForLink,
+} from "../lib/addFromPage";
 import { showError } from "../lib/feedback";
 import { formatDate } from "../lib/format";
 
@@ -121,8 +123,26 @@ async function load(): Promise<void> {
   } finally {
     loaded.value = true;
   }
-  const list = defaultList(lists.value, product.value);
+  const list = defaultList(lists.value, product.value) ?? (await newStoreList());
   if (list) addTo(list);
+}
+
+/** A new list for the product's store when it has no open one ("Publix"), or null for a site HList doesn't know. */
+async function newStoreList(): Promise<ShoppingList | null> {
+  if (!product.value?.link) return null;
+  loaded.value = false;
+  try {
+    const store = storeForLink(await hlist.getStores(), product.value.link);
+    if (!store) return null;
+    const list = await hlist.createList(store.name);
+    lists.value = [list, ...lists.value];
+    return list;
+  } catch (error) {
+    await showError(error, "Couldn't Create List");
+    return null;
+  } finally {
+    loaded.value = true;
+  }
 }
 
 async function copyScript(): Promise<void> {

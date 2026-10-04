@@ -2,7 +2,7 @@
 // page, which opens HList's /add page with what it found. The page is open in the user's own browser, so this
 // works for stores whose pages the server can't download (Publix).
 
-import type { ShoppingList, StoreRef } from "../api/types";
+import type { ShoppingList, Store, StoreRef } from "../api/types";
 
 /** What the script found on the product page; everything but the name is optional. */
 export interface ProductFromPage {
@@ -114,6 +114,20 @@ export function listMatchesLink(store: StoreRef | null | undefined, link: string
 /** The list to add the product to without asking: the newest open list for the product's store, if any. */
 export function defaultList(lists: ShoppingList[], product: ProductFromPage): ShoppingList | null {
   return newestFirst(lists).find((list) => !list.completed && listMatchesLink(list.store, product.link)) ?? null;
+}
+
+/** The store whose website the product came from (www.publix.com/pd/... → Publix), or null. */
+export function storeForLink(stores: Store[], link: string | undefined): Store | null {
+  if (!link) return null;
+  try {
+    const host = new URL(link).hostname.toLowerCase();
+    return stores.find((store) => {
+      const site = new URL(store.site).hostname.toLowerCase().replace(/^www\./, "");
+      return host === site || host.endsWith(`.${site}`);
+    }) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Lists newest first (the server returns them in no particular order). */

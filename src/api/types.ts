@@ -10,6 +10,14 @@ export interface StoreRef {
   name: string;
 }
 
+/** A store HList recognises in list names (GET /api/stores). */
+export interface Store extends StoreRef {
+  aliases: string[];
+  /** The store's website, e.g. "https://www.publix.com". */
+  site: string;
+  iconUrl: string;
+}
+
 export interface ShoppingList {
   shoppingListId: number;
   shoppingListName: string;

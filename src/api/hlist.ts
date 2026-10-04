@@ -1,5 +1,5 @@
 import { ApiError, request, send } from "./http";
-import type { Brand, Department, Item, ItemRequest, ListItem, Page, ShoppingList, User } from "./types";
+import type { Brand, Department, Item, ItemRequest, ListItem, Page, ShoppingList, Store, User } from "./types";
 
 // Auth
 
@@ -59,6 +59,11 @@ export function getLists(page: number, size: number): Promise<Page<ShoppingList>
 
 export function createList(name: string): Promise<ShoppingList> {
   return request("/api/shopping-lists", { method: "POST", body: { name } });
+}
+
+/** The stores HList recognises in list names. */
+export function getStores(): Promise<Store[]> {
+  return request("/api/stores");
 }
 
 export function setListCompleted(listId: number, completed: boolean): Promise<void> {

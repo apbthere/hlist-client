@@ -72,7 +72,9 @@ publix.com blocks the server (Akamai), so the user's own browser reads the page.
   use imports, helpers or anything outside its own body. `tests/addFromPage.test.ts` runs the real script on mock
   pages.
 - **The /add page:**
-  - It picks the newest open list whose store matches the link's site (`defaultList`), otherwise it asks.
+  - It picks the newest open list whose store matches the link's site (`defaultList`). Without one, it creates a
+    list named after the store (`storeForLink` against `GET /api/stores`, e.g. "Publix"). It asks only when the
+    site isn't a store HList knows.
   - It hands the product to `ListItemsPage` (`setPendingProduct`), which opens the editor with `fromPage`.
   - Without parameters, /add is the setup page. The desktop header and the Account sheet link to it.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultList, listMatchesLink, productFromQuery, shortcutScript, bookmarklet } from "../src/lib/addFromPage";
-import type { ShoppingList } from "../src/api/types";
+import { defaultList, listMatchesLink, productFromQuery, shortcutScript, bookmarklet, storeForLink } from "../src/lib/addFromPage";
+import type { ShoppingList, Store } from "../src/api/types";
 
 /** Runs the Shortcut's script on a page, as Safari would, and returns the HList address it produces. */
 function runOnPage(html: string, url: string): URL {
@@ -97,5 +97,17 @@ describe("adding a product from a page", () => {
     expect(defaultList(lists, { name: "Milk", link: "https://www.publix.com/pd/milk" })?.shoppingListId).toBe(2);
     expect(defaultList(lists, { name: "Milk", link: "https://www.aldi.us/milk" })).toBeNull();
     expect(defaultList(lists, { name: "Milk" })).toBeNull();
+  });
+
+  it("finds the store of a product's website, for a new list when it has none open", () => {
+    const store = (key: string, name: string, site: string): Store => ({ key, name, site, aliases: [], iconUrl: "" });
+    const stores = [store("publix", "Publix", "https://www.publix.com"), store("aldi", "Aldi", "https://www.aldi.us")];
+
+    expect(storeForLink(stores, "https://www.publix.com/pd/mission-tortillas/RIO-PCI-123")?.name).toBe("Publix");
+    expect(storeForLink(stores, "https://publix.com/pd/x")?.name).toBe("Publix");
+    expect(storeForLink(stores, "https://shop.aldi.us/x")?.name).toBe("Aldi");
+    expect(storeForLink(stores, "https://www.notpublix.com/x")).toBeNull();
+    expect(storeForLink(stores, "https://www.example.com/x")).toBeNull();
+    expect(storeForLink(stores, undefined)).toBeNull();
   });
 });
