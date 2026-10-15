@@ -139,9 +139,9 @@
             :value="departmentChoice"
             @ion-change="chooseCatalog('department', $event)"
           >
+            <ion-select-option value="new">New Department…</ion-select-option>
             <ion-select-option value="none">None</ion-select-option>
             <ion-select-option v-for="[id, label] in sortedDepartments" :key="id" :value="String(id)">{{ label }}</ion-select-option>
-            <ion-select-option value="new">New Department…</ion-select-option>
           </ion-select>
         </ion-item>
         <ion-item>
@@ -152,9 +152,9 @@
             :value="brandChoice"
             @ion-change="chooseCatalog('brand', $event)"
           >
+            <ion-select-option value="new">New Brand…</ion-select-option>
             <ion-select-option value="none">None</ion-select-option>
             <ion-select-option v-for="[id, label] in sortedBrands" :key="id" :value="String(id)">{{ label }}</ion-select-option>
-            <ion-select-option value="new">New Brand…</ion-select-option>
           </ion-select>
         </ion-item>
       </ion-list>
