@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultList, listMatchesLink, productFromQuery, shortcutScript, bookmarklet, storeForLink } from "../src/lib/addFromPage";
+import { defaultList, productFromQuery, shortcutScript, bookmarklet, storeForLink } from "../src/lib/addFromPage";
 import type { ShoppingList, Store } from "../src/api/types";
 
 /** Runs the Shortcut's script on a page, as Safari would, and returns the HList address it produces. */
@@ -11,6 +11,15 @@ function runOnPage(html: string, url: string): URL {
   new Function("document", "location", "completion", shortcutScript("https://hlist.test"))(page, location, (value: string) => (result = value));
   return new URL(result);
 }
+
+const store = (key: string, name: string, ...domains: string[]): Store =>
+  ({ key, name, site: `https://www.${domains[0]}`, domains, aliases: [], iconUrl: "" });
+const STORES = [
+  store("publix", "Publix", "publix.com"),
+  store("costco", "Costco", "costco.com", "costcobusinessdelivery.com"),
+  store("aldi", "Aldi", "aldi.us"),
+  store("target", "Target", "target.com"),
+];
 
 const PUBLIX_PAGE = `<html><head>
   <meta property="og:title" content="Publix Mild Pork Italian Sausage, Our Exclusive Recipe | Publix Super Markets">
@@ -84,28 +93,23 @@ describe("adding a product from a page", () => {
   const list = (id: number, name: string, store: string | null, completed = false): ShoppingList =>
     ({ shoppingListId: id, shoppingListName: name, username: "me", completed, store: store ? { key: store, name: store } : null });
 
-  it("matches lists to the store's website", () => {
-    expect(listMatchesLink({ key: "publix", name: "Publix" }, "https://www.publix.com/pd/x")).toBe(true);
-    expect(listMatchesLink({ key: "home-depot", name: "Home Depot" }, "https://www.homedepot.com/p/x")).toBe(true);
-    expect(listMatchesLink({ key: "target", name: "Target" }, "https://www.publix.com/target-practice")).toBe(false);
-    expect(listMatchesLink(null, "https://www.publix.com/")).toBe(false);
-  });
-
   it("picks the newest open list for the store", () => {
     const lists = [list(3, "Publix", "publix", true), list(1, "Publix", "publix"), list(2, "Publix again", "publix"), list(4, "Costco", "costco")];
 
-    expect(defaultList(lists, { name: "Milk", link: "https://www.publix.com/pd/milk" })?.shoppingListId).toBe(2);
-    expect(defaultList(lists, { name: "Milk", link: "https://www.aldi.us/milk" })).toBeNull();
-    expect(defaultList(lists, { name: "Milk" })).toBeNull();
+    expect(defaultList(lists, { name: "Milk", link: "https://www.publix.com/pd/milk" }, STORES)?.shoppingListId).toBe(2);
+    expect(defaultList(lists, { name: "Onions", link: "https://www.costcobusinessdelivery.com/p/-/yellow-onions-10-lbs/11775270" }, STORES)?.shoppingListId).toBe(4);
+    expect(defaultList(lists, { name: "Milk", link: "https://www.aldi.us/milk" }, STORES)).toBeNull();
+    expect(defaultList(lists, { name: "Milk", link: "https://www.example.com/target" }, STORES)).toBeNull();
+    expect(defaultList(lists, { name: "Milk" }, STORES)).toBeNull();
   });
 
   it("finds the store of a product's website, for a new list when it has none open", () => {
-    const store = (key: string, name: string, site: string): Store => ({ key, name, site, aliases: [], iconUrl: "" });
-    const stores = [store("publix", "Publix", "https://www.publix.com"), store("aldi", "Aldi", "https://www.aldi.us")];
+    const stores = STORES;
 
     expect(storeForLink(stores, "https://www.publix.com/pd/mission-tortillas/RIO-PCI-123")?.name).toBe("Publix");
     expect(storeForLink(stores, "https://publix.com/pd/x")?.name).toBe("Publix");
     expect(storeForLink(stores, "https://shop.aldi.us/x")?.name).toBe("Aldi");
+    expect(storeForLink(stores, "https://www.costcobusinessdelivery.com/p/-/yellow-onions-10-lbs/11775270")?.name).toBe("Costco");
     expect(storeForLink(stores, "https://www.notpublix.com/x")).toBeNull();
     expect(storeForLink(stores, "https://www.example.com/x")).toBeNull();
     expect(storeForLink(stores, undefined)).toBeNull();

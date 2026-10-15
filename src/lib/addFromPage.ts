@@ -2,7 +2,7 @@
 // page, which opens HList's /add page with what it found. The page is open in the user's own browser, so this
 // works for stores whose pages the server can't download (Publix).
 
-import type { ShoppingList, Store, StoreRef } from "../api/types";
+import type { ShoppingList, Store } from "../api/types";
 
 /** What the script found on the product page; everything but the name is optional. */
 export interface ProductFromPage {
@@ -99,21 +99,11 @@ export function productFromQuery(query: Record<string, unknown>): ProductFromPag
   return { name, photo: address("photo"), section, size, brand, link };
 }
 
-/** Whether a list is for the store whose site the product came from (publix.com → a "Publix" list). */
-export function listMatchesLink(store: StoreRef | null | undefined, link: string | undefined): boolean {
-  if (!store?.key || !link) return false;
-  try {
-    const host = new URL(link).hostname.toLowerCase().replace(/^www\./, "");
-    const key = store.key.toLowerCase().replace(/[^a-z0-9]/g, "");
-    return key.length > 0 && host.replace(/[^a-z0-9.]/g, "").split(".").some((part) => part === key);
-  } catch {
-    return false;
-  }
-}
-
 /** The list to add the product to without asking: the newest open list for the product's store, if any. */
-export function defaultList(lists: ShoppingList[], product: ProductFromPage): ShoppingList | null {
-  return newestFirst(lists).find((list) => !list.completed && listMatchesLink(list.store, product.link)) ?? null;
+export function defaultList(lists: ShoppingList[], product: ProductFromPage, stores: Store[]): ShoppingList | null {
+  const store = storeForLink(stores, product.link);
+  if (!store) return null;
+  return newestFirst(lists).find((list) => !list.completed && list.store?.key === store.key) ?? null;
 }
 
 /** The store whose website the product came from (www.publix.com/pd/... → Publix), or null. */
@@ -121,10 +111,7 @@ export function storeForLink(stores: Store[], link: string | undefined): Store |
   if (!link) return null;
   try {
     const host = new URL(link).hostname.toLowerCase();
-    return stores.find((store) => {
-      const site = new URL(store.site).hostname.toLowerCase().replace(/^www\./, "");
-      return host === site || host.endsWith(`.${site}`);
-    }) ?? null;
+    return stores.find((store) => store.domains.some((domain) => host === domain || host.endsWith(`.${domain}`))) ?? null;
   } catch {
     return null;
   }

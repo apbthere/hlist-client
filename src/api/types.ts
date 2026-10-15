@@ -15,6 +15,8 @@ export interface Store extends StoreRef {
   aliases: string[];
   /** The store's website, e.g. "https://www.publix.com". */
   site: string;
+  /** The domains of the store's websites, e.g. ["costco.com", "costcobusinessdelivery.com"]. */
+  domains: string[];
   iconUrl: string;
 }
 

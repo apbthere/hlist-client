@@ -86,7 +86,7 @@ import {
   IonToolbar, onIonViewWillEnter, useIonRouter,
 } from "@ionic/vue";
 import * as hlist from "../api/hlist";
-import type { ShoppingList } from "../api/types";
+import type { ShoppingList, Store } from "../api/types";
 import StoreBadge from "../components/StoreBadge.vue";
 import {
   bookmarklet, defaultList, newestFirst, productFromQuery, setPendingProduct, shortcutScript, storeForLink,
@@ -99,6 +99,7 @@ const router = useIonRouter();
 const product = computed(() => productFromQuery(route.query));
 const details = computed(() => [product.value?.brand, product.value?.section, product.value?.size].filter(Boolean).join(" · "));
 const lists = ref<ShoppingList[]>([]);
+const stores = ref<Store[]>([]);
 const loaded = ref(false);
 const openLists = computed(() => newestFirst(lists.value).filter((list) => !list.completed));
 
@@ -116,14 +117,16 @@ async function load(): Promise<void> {
   if (!product.value) return;
   loaded.value = false;
   try {
-    lists.value = (await hlist.getLists(0, 100)).content;
+    const [page, known] = await Promise.all([hlist.getLists(0, 100), hlist.getStores()]);
+    lists.value = page.content;
+    stores.value = known;
   } catch (error) {
     await showError(error, "Couldn't Load Lists");
     return;
   } finally {
     loaded.value = true;
   }
-  const list = defaultList(lists.value, product.value) ?? (await newStoreList());
+  const list = defaultList(lists.value, product.value, stores.value) ?? (await newStoreList());
   if (list) addTo(list);
 }
 
@@ -132,7 +135,7 @@ async function newStoreList(): Promise<ShoppingList | null> {
   if (!product.value?.link) return null;
   loaded.value = false;
   try {
-    const store = storeForLink(await hlist.getStores(), product.value.link);
+    const store = storeForLink(stores.value, product.value.link);
     if (!store) return null;
     const list = await hlist.createList(store.name);
     lists.value = [list, ...lists.value];
