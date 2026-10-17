@@ -90,3 +90,11 @@ export interface ItemRequest {
   brandId: number | null;
   comment: string | null;
 }
+
+/** A token that lets an AI assistant use HList's MCP server (/mcp) as this user. */
+export interface AccessToken {
+  id: number;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}

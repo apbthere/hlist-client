@@ -1,5 +1,5 @@
 import { ApiError, request, send } from "./http";
-import type { Brand, Department, Item, ItemRequest, ListItem, Page, ShoppingList, Store, User } from "./types";
+import type { AccessToken, Brand, Department, Item, ItemRequest, ListItem, Page, ShoppingList, Store, User } from "./types";
 
 // Auth
 
@@ -49,6 +49,21 @@ export async function currentUser(): Promise<User | null> {
 
 export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   return request("/api/users/me/password", { method: "PUT", body: { currentPassword, newPassword } });
+}
+
+// AI assistants (MCP access tokens)
+
+export function getAccessTokens(): Promise<AccessToken[]> {
+  return request("/api/users/me/access-tokens");
+}
+
+/** Creates a token; this is the only time the server returns its secret. */
+export function createAccessToken(label: string): Promise<{ token: string; details: AccessToken }> {
+  return request("/api/users/me/access-tokens", { method: "POST", body: { label } });
+}
+
+export function deleteAccessToken(id: number): Promise<void> {
+  return request(`/api/users/me/access-tokens/${id}`, { method: "DELETE" });
 }
 
 // Shopping lists

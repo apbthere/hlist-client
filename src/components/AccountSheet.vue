@@ -41,6 +41,25 @@
       </p>
     </template>
 
+    <div class="section-header">AI Assistants</div>
+    <ion-list :inset="true">
+      <ion-item v-for="token in accessTokens" :key="token.id" button :detail="false" @click="confirmRemoveToken(token)">
+        <ion-icon slot="start" :icon="sparklesOutline" color="primary" />
+        <ion-label>
+          <h3>{{ token.label }}</h3>
+          <p>
+            Added {{ formatDate(token.createdAt) }}<template v-if="token.lastUsedAt"> · Last used {{ formatDate(token.lastUsedAt) }}</template>
+          </p>
+        </ion-label>
+      </ion-item>
+      <ion-item button :detail="false" :disabled="connecting" @click="connectAssistant">
+        <ion-label color="primary">{{ connecting ? "Connecting…" : "Connect an Assistant" }}</ion-label>
+      </ion-item>
+    </ion-list>
+    <p class="section-footer">
+      Let Claude or another AI assistant read your lists and add items, e.g. "add paper towels to my Costco list".
+    </p>
+
     <div class="section-header">Change Password</div>
     <form @submit.prevent="changePassword">
       <!-- Hidden username field so Keychain updates the right saved password. -->
@@ -86,11 +105,12 @@ import {
   IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonTitle, IonToolbar,
   actionSheetController, alertController,
 } from "@ionic/vue";
-import { desktopOutline, globeOutline, keyOutline, personCircle } from "ionicons/icons";
+import { desktopOutline, globeOutline, keyOutline, personCircle, sparklesOutline } from "ionicons/icons";
 import * as hlist from "../api/hlist";
+import type { AccessToken } from "../api/types";
 import BuildInfo from "./BuildInfo.vue";
 import TextField from "./TextField.vue";
-import { showError } from "../lib/feedback";
+import { promptForText, showError } from "../lib/feedback";
 import { formatDate } from "../lib/format";
 import {
   type Passkey, addPasskey, deletePasskey, getPasskeys, passkeysAvailable, wasCancelled,
@@ -109,6 +129,79 @@ const newField = ref<InstanceType<typeof TextField> | null>(null);
 const passkeysOn = ref(false);
 const passkeys = ref<Passkey[]>([]);
 const adding = ref(false);
+
+const accessTokens = ref<AccessToken[]>([]);
+const connecting = ref(false);
+
+onMounted(() => {
+  hlist.getAccessTokens().then((tokens) => { accessTokens.value = tokens; }).catch(() => {});
+});
+
+/**
+ * Creates an access token and shows it once, with the command that adds HList to Claude Code. Other assistants
+ * need the server address (/mcp) and the token.
+ */
+async function connectAssistant(): Promise<void> {
+  if (connecting.value) return;
+  const label = await promptForText({
+    header: "Connect an Assistant",
+    message: "Name it after the assistant, so you know which one to remove later.",
+    placeholder: "Name",
+    confirmText: "Create",
+    value: "Claude",
+  });
+  if (!label) return;
+  connecting.value = true;
+  let token: string;
+  try {
+    const created = await hlist.createAccessToken(label);
+    token = created.token;
+    accessTokens.value = [...accessTokens.value, created.details];
+  } catch (error) {
+    await showError(error, "Couldn't Connect");
+    return;
+  } finally {
+    connecting.value = false;
+  }
+  const address = `${window.location.origin}/mcp`;
+  const command = `claude mcp add --transport http hlist ${address} --header "Authorization: Bearer ${token}"`;
+  const copy = (text: string): false => {
+    navigator.clipboard?.writeText(text).catch(() => showError(
+      "Select the token in the field and copy it instead.", "Couldn't Copy"));
+    return false; // keep the alert open
+  };
+  const alert = await alertController.create({
+    header: "Access Token",
+    message: `Copy it now: HList won't show it again. For Claude Code, copy the setup command and run it in `
+      + `Terminal. Other assistants need the address ${address} and this token.`,
+    inputs: [{ name: "token", type: "text", value: token, attributes: { readonly: true } }],
+    buttons: [
+      { text: "Copy Setup Command", handler: () => copy(command) },
+      { text: "Copy Token", handler: () => copy(token) },
+      { text: "Done", role: "cancel" },
+    ],
+  });
+  await alert.present();
+}
+
+async function confirmRemoveToken(token: AccessToken): Promise<void> {
+  const sheet = await actionSheetController.create({
+    header: `"${token.label}" will no longer be able to use your lists.`,
+    buttons: [
+      { text: "Disconnect", role: "destructive" },
+      { text: "Cancel", role: "cancel" },
+    ],
+  });
+  await sheet.present();
+  const { role } = await sheet.onDidDismiss();
+  if (role !== "destructive") return;
+  try {
+    await hlist.deleteAccessToken(token.id);
+    accessTokens.value = accessTokens.value.filter((entry) => entry.id !== token.id);
+  } catch (error) {
+    await showError(error, "Couldn't Disconnect");
+  }
+}
 
 onMounted(async () => {
   if (!await passkeysAvailable()) return;
