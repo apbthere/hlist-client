@@ -1,5 +1,7 @@
 # HList client
 
+[![CI](https://github.com/apbthere/hlist-client/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/apbthere/hlist-client/actions/workflows/ci.yml)
+
 An iOS-style mobile client for the [HList server](https://github.com/apbthere/hlist-server), built with Ionic 9 (always in iOS mode),
 Vue 3, TypeScript and Vite. It installs on iPhone and iPad as a home-screen web app, so no App Store is
 involved.
@@ -42,6 +44,8 @@ npm run build      # type-check and build to dist/
 npm run icons      # regenerate PNG icons from public/logo.svg
 npm run readme-media   # retake the README screenshots and demo GIF (in hlist-server/docs/images/)
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and pull request conventions.
 
 ## Docker
 
