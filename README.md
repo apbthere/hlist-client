@@ -1,6 +1,6 @@
 # HList client
 
-An iOS-style mobile client for the [HList server](../server), built with Ionic 9 (always in iOS mode),
+An iOS-style mobile client for the [HList server](https://github.com/apbthere/hlist-server), built with Ionic 9 (always in iOS mode),
 Vue 3, TypeScript and Vite. It installs on iPhone and iPad as a home-screen web app, so no App Store is
 involved.
 
@@ -32,7 +32,7 @@ npm run dev        # http://localhost:5173/app/, proxies /api to http://localhos
 HLIST_SERVER=http://localhost:18080 npm run dev   # proxy to a different server
 ```
 
-Run the Spring Boot server alongside it. The dev server also listens on your LAN address, so you can
+Run the Spring Boot server alongside it (see its [README](https://github.com/apbthere/hlist-server#running-it)). The dev server also listens on your LAN address, so you can
 open it from a phone on the same Wi-Fi network.
 
 ```sh
@@ -40,16 +40,18 @@ npm test           # unit tests (Vitest)
 npm run typecheck  # vue-tsc
 npm run build      # type-check and build to dist/
 npm run icons      # regenerate PNG icons from public/logo.svg
-npm run readme-media   # retake the README screenshots and demo GIF (in ../server/docs/images/)
+npm run readme-media   # retake the README screenshots and demo GIF (in hlist-server/docs/images/)
 ```
 
 ## Docker
 
 The server repository's Dockerfile builds this client into the same image. It is passed in as a
-named build context, so keep both repositories side by side (`server/` and `hlist-client/`):
+named build context, so keep both repositories side by side (`hlist-server/` and `hlist-client/`):
 
 ```sh
-cd ../server
+git clone https://github.com/apbthere/hlist-server.git
+git clone https://github.com/apbthere/hlist-client.git
+cd hlist-server
 docker compose up --build                                   # or:
 docker build --build-context client=../hlist-client -t hlist .
 ```

@@ -1,16 +1,15 @@
-// Makes the README's screenshots and demo GIF (../server/docs/images/), in WebKit at iPhone size, from a throwaway
+// Makes the README's screenshots and demo GIF (the server repository's docs/images/), in WebKit at iPhone size, from a throwaway
 // server with sample lists. Product photos come from Open Food Facts and store icons from the stores' sites, so it
 // needs the internet. Run with: npm run readme-media (builds dist/ first; the server jar must be built too).
 import { mkdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import gifenc from "gifenc";
-import { apiFetch, baseUrl, openBrowser, signUp, startServer } from "./harness.mjs";
+import { apiFetch, baseUrl, openBrowser, serverDir, signUp, startServer } from "./harness.mjs";
 
 const { GIFEncoder, applyPalette, quantize } = gifenc;
 
-const imagesDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../server/docs/images");
+const imagesDir = join(serverDir, "docs/images");
 const iPhone = {
   viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, hasTouch: true, colorScheme: "light",
   userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "

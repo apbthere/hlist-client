@@ -9,7 +9,14 @@ import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
 
 const clientDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const serverDir = resolve(clientDir, "../server");
+/**
+ * The server repository, next to this one: hlist-server/ as cloned from GitHub, or server/. HLIST_SERVER_DIR
+ * overrides it.
+ */
+export const serverDir = process.env.HLIST_SERVER_DIR
+  ? resolve(process.env.HLIST_SERVER_DIR)
+  : [resolve(clientDir, "../hlist-server"), resolve(clientDir, "../server")].find(existsSync)
+    ?? resolve(clientDir, "../hlist-server");
 const port = Number(process.env.HLIST_E2E_PORT ?? 18080);
 export const baseUrl = `http://localhost:${port}`;
 /** Screenshots land here (git-ignored). */
@@ -29,7 +36,7 @@ async function serverUp() {
 }
 
 /**
- * Starts the packaged server (../server/target, built with ./mvnw -q -DskipTests package) on a fresh database.
+ * Starts the packaged server (target/ in serverDir, built with ./mvnw -q -DskipTests package) on a fresh database.
  * Resolves to { stop } once it answers.
  */
 export async function startServer() {
@@ -37,9 +44,9 @@ export async function startServer() {
     throw new Error(`Something is already running on port ${port}. Stop it (or set HLIST_E2E_PORT) and retry.`);
   }
   const jar = process.env.HLIST_SERVER_JAR ?? join(serverDir, "target/server-0.0.1-SNAPSHOT.jar");
-  if (!existsSync(jar)) throw new Error(`No server jar at ${jar}. Run ./mvnw -q -DskipTests package in ../server.`);
+  if (!existsSync(jar)) throw new Error(`No server jar at ${jar}. Run ./mvnw -q -DskipTests package in ${serverDir}.`);
   if (statSync(join(serverDir, "src")).mtimeMs > statSync(jar).mtimeMs) {
-    console.warn("warning: ../server/src changed after the jar was built; run ./mvnw -q -DskipTests package");
+    console.warn(`warning: ${serverDir}/src changed after the jar was built; run ./mvnw -q -DskipTests package`);
   }
   if (!existsSync(join(clientDir, "dist/index.html"))) throw new Error("No dist/. Run npm run build first.");
 
