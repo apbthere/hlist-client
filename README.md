@@ -4,6 +4,16 @@ An iOS-style mobile client for the [HList server](../server), built with Ionic 9
 Vue 3, TypeScript and Vite. It installs on iPhone and iPad as a home-screen web app, so no App Store is
 involved.
 
+<p align="center">
+  <img src="https://github.com/apbthere/hlist-server/raw/main/docs/images/lists.png" width="200" alt="Lists">
+  <img src="https://github.com/apbthere/hlist-server/raw/main/docs/images/list-items.png" width="200" alt="A list grouped by department">
+  <img src="https://github.com/apbthere/hlist-server/raw/main/docs/images/item-editor.png" width="200" alt="Editing an item">
+  <img src="https://github.com/apbthere/hlist-server/raw/main/docs/images/account-assistant.png" width="200" alt="Account: AI assistants">
+</p>
+
+More, including a demo of an assistant adding an item, in the
+[server's README](https://github.com/apbthere/hlist-server#readme).
+
 ## How it fits with the server
 
 The server serves this app's build output under `/app/`, on the same origin as `/api`. The session,
@@ -30,6 +40,7 @@ npm test           # unit tests (Vitest)
 npm run typecheck  # vue-tsc
 npm run build      # type-check and build to dist/
 npm run icons      # regenerate PNG icons from public/logo.svg
+npm run readme-media   # retake the README screenshots and demo GIF (in ../server/docs/images/)
 ```
 
 ## Docker
