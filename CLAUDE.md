@@ -1,7 +1,7 @@
 # HList client
 
 The iOS-style mobile client for HList: Ionic 9 (always iOS mode) + Vue 3 + TypeScript + Vite, installed on
-iPhone/iPad as a home-screen web app (no App Store). The server (`../server`, see its `CLAUDE.md`) serves the build
+iPhone/iPad as a home-screen web app (no App Store). The server (`../hlist-server`, or `../server` in some checkouts; see its `CLAUDE.md`) serves the build
 under `/app/` on the same origin as `/api`. `README.md` covers setup and installing on a device.
 
 ## Commands
@@ -95,7 +95,7 @@ publix.com blocks the server (Akamai), so the user's own browser reads the page.
 ## Testing in a real browser engine
 
 - `e2e/` (`npm run e2e`, Node's test runner + `playwright-core`): each `*.test.mjs` starts a throwaway server
-  with `e2e/harness.mjs`. That's the packaged `../server/target` jar (run `./mvnw -q -DskipTests package` there
+  with `e2e/harness.mjs`. That's the server repository's packaged `target/` jar (`serverDir`: `../hlist-server` or `../server`, or `HLIST_SERVER_DIR`) (run `./mvnw -q -DskipTests package` there
   after server changes), on port 18080 with a database in a temporary folder, serving this repo's `dist/`.
 - To check a UI change, add a test there or a scratch script that imports the harness:
   - `startServer()` and `openBrowser({ engine, device: iPad | mac })`, which collects page errors in `errors`.
