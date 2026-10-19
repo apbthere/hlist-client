@@ -79,3 +79,7 @@ app still works, but it won't cache itself for offline use until the server is b
 - `src/views/`: Login, Lists and List Items screens
 - `src/components/`: item row, item editor sheet, account sheet
 - `src/theme/variables.css`: iOS grouped colors (light and dark) and the green tint
+
+## License
+
+[MIT](LICENSE)
