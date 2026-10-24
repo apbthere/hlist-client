@@ -315,9 +315,10 @@ function onNamePaste(event: ClipboardEvent): void {
 
 /**
  * The server downloads the picture (or the page's product picture) and stores it like an upload. From the name
- * field, the product's name fills an empty name and its brand an empty brand.
+ * field, the product's name fills an empty name and its brand an empty brand. Returns whether it worked; quietly,
+ * a failure isn't shown.
  */
-async function importPicture(link: string, fromNameField = false): Promise<void> {
+async function importPicture(link: string, fromNameField = false, quietly = false): Promise<boolean> {
   const nameFromPage = fromNameField && name.value.trim() === "";
   photoBusy.value = true;
   namePending.value = nameFromPage;
@@ -333,8 +334,10 @@ async function importPicture(link: string, fromNameField = false): Promise<void>
     if (fromNameField && imported.brand && brandId.value === null) {
       brandId.value = await resolveCatalog("brand", imported.brand);
     }
+    return true;
   } catch (error) {
-    await showError(error, "Couldn't Add Photo");
+    if (!quietly) await showError(error, "Couldn't Add Photo");
+    return false;
   } finally {
     photoBusy.value = false;
     namePending.value = false;
@@ -761,8 +764,10 @@ async function fillFromPage(product: ProductFromPage): Promise<void> {
   } catch (error) {
     await showError(error, "Couldn't Fill In the Item");
   }
+  // The server picks the product's photo from the page (a page's og:image can be the site's banner, as on Whole
+  // Foods); the page's og:image is for pages the server can't read (Publix).
+  if (product.link && (await importPicture(product.link, true, Boolean(product.photo)))) return;
   if (product.photo) await importPicture(product.photo);
-  else if (product.link) await importPicture(product.link, true);
 }
 
 onMounted(() => {
