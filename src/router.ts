@@ -6,6 +6,7 @@ import LoginPage from "./views/LoginPage.vue";
 import ListsPage from "./views/ListsPage.vue";
 import ListItemsPage from "./views/ListItemsPage.vue";
 import AddFromPage from "./views/AddFromPage.vue";
+import FavoritesPage from "./views/FavoritesPage.vue";
 
 const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/lists" },
@@ -13,6 +14,12 @@ const routes: RouteRecordRaw[] = [
   { path: "/lists", component: ListsPage },
   { path: "/lists/:listId(\\d+)", component: ListItemsPage, props: (route) => ({ listId: Number(route.params.listId) }) },
   { path: "/add", component: AddFromPage },
+  {
+    path: "/favorites",
+    component: FavoritesPage,
+    // ?list=<id>: choosing favorites to add to that list.
+    props: (route) => ({ pickingFor: /^\d+$/.test(String(route.query.list ?? "")) ? Number(route.query.list) : null }),
+  },
   { path: "/:pathMatch(.*)*", redirect: "/lists" },
 ];
 

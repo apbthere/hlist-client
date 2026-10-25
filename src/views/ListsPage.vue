@@ -4,6 +4,9 @@
       <ion-toolbar>
         <ion-title>Lists</ion-title>
         <ion-buttons slot="end">
+          <ion-button aria-label="Favorites" @click="router.push('/favorites')">
+            <ion-icon slot="icon-only" :icon="starOutline" />
+          </ion-button>
           <ion-button aria-label="Account" @click="accountOpen = true">
             <ion-icon slot="icon-only" :icon="personCircleOutline" />
           </ion-button>
@@ -105,7 +108,7 @@ import {
 } from "@ionic/vue";
 import type { InfiniteScrollCustomEvent, RefresherCustomEvent } from "@ionic/vue";
 import {
-  addCircle, arrowUndo, cartOutline, checkmarkCircle, personCircleOutline,
+  addCircle, arrowUndo, cartOutline, checkmarkCircle, personCircleOutline, starOutline,
 } from "ionicons/icons";
 import * as hlist from "../api/hlist";
 import type { ShoppingList } from "../api/types";

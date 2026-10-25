@@ -3,7 +3,7 @@
 
 import { clientId } from "../api/http";
 
-export type LiveChangeType = "lists" | "list-items" | "items" | "catalog";
+export type LiveChangeType = "lists" | "list-items" | "items" | "favorites" | "catalog";
 
 export interface LiveChange {
   type: LiveChangeType;

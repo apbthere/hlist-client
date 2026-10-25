@@ -55,9 +55,11 @@
               :item="item"
               :checked="item.completed"
               :detail="describe(item)"
+              :favorite="isFavorite(item)"
               @toggle="toggle(item, $event)"
               @edit="edit(item)"
               @remove="remove(item, $event)"
+              @favorite="toggleFavorite(item, $event)"
               @photo="viewing = item"
             />
           </ion-list>
@@ -77,9 +79,11 @@
               :item="item"
               :checked="true"
               :detail="describe(item)"
+              :favorite="isFavorite(item)"
               @toggle="toggle(item, $event)"
               @edit="edit(item)"
               @remove="remove(item, $event)"
+              @favorite="toggleFavorite(item, $event)"
               @photo="viewing = item"
             />
           </ion-list>
@@ -126,20 +130,21 @@ import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import {
   IonBackButton, IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonIcon, IonList, IonModal, IonPage,
   IonRefresher, IonRefresherContent, IonSpinner, IonTitle, IonToolbar, actionSheetController, alertController,
-  onIonViewWillEnter, useIonRouter,
+  onIonViewWillEnter, toastController, useIonRouter,
 } from "@ionic/vue";
 import type { RefresherCustomEvent } from "@ionic/vue";
 import { addCircle, basketOutline, checkmarkCircle, ellipsisHorizontalCircleOutline } from "ionicons/icons";
 import * as hlist from "../api/hlist";
-import type { Item, ListItem, ShoppingList } from "../api/types";
+import type { Favorite, Item, ListItem, ShoppingList } from "../api/types";
 import ItemEditorSheet from "../components/ItemEditorSheet.vue";
 import ItemRow from "../components/ItemRow.vue";
 import PhotoViewer from "../components/PhotoViewer.vue";
 import { photoUrl, prefetchPhotos } from "../lib/photos";
-import { showError } from "../lib/feedback";
+import { promptForText, showError } from "../lib/feedback";
+import { categoriesOf, favoriteFor, guessCategory } from "../lib/favorites";
 import { formatDate } from "../lib/format";
 import { storeIconUrl } from "../lib/stores";
-import { countToBuy, groupByDepartment } from "../lib/items";
+import { capitalizeWords, countToBuy, groupByDepartment } from "../lib/items";
 import { cachedList, findList, forgetList } from "../lib/listCache";
 import { debounced, subscribe } from "../lib/live";
 import { takePendingProduct, type ProductFromPage } from "../lib/addFromPage";
@@ -156,6 +161,7 @@ const presentingElement = ref<HTMLElement | undefined>();
 const list = ref<ShoppingList | null>(cachedList(props.listId) ?? null);
 const items = ref<ListItem[]>([]);
 const previousItems = ref<Item[]>([]);
+const favorites = ref<Favorite[]>([]);
 const departments = reactive(new Map<number, string>());
 const brands = reactive(new Map<number, string>());
 const loaded = ref(false);
@@ -228,6 +234,7 @@ async function load(): Promise<void> {
       hlist.getDepartments(),
       hlist.getBrands(),
       hlist.getPreviousItems().catch(() => [] as Item[]),
+      loadFavorites().catch(() => {}),
     ]);
     departments.clear();
     for (const department of departmentList) departments.set(department.departmentId, department.departmentName);
@@ -246,6 +253,81 @@ async function load(): Promise<void> {
     if (product) add(product);
   } catch (error) {
     await showError(error, "Couldn't Load List");
+  }
+}
+
+async function loadFavorites(): Promise<void> {
+  favorites.value = await hlist.getFavorites();
+}
+
+function isFavorite(item: ListItem): boolean {
+  return favoriteFor(item, favorites.value) !== undefined;
+}
+
+/**
+ * Makes the item a favorite, filed under the category its name suggests (offered first) or another one; or, if it
+ * is one, removes that favorite.
+ */
+async function toggleFavorite(item: ListItem, sliding?: HTMLIonItemSlidingElement): Promise<void> {
+  await sliding?.close();
+  const existing = favoriteFor(item, favorites.value);
+  if (existing) {
+    await unfavorite(existing);
+    return;
+  }
+  const categories = categoriesOf(favorites.value);
+  const guess = guessCategory(item.itemName, categories);
+  const offered = [...(guess ? [guess] : []), ...categories.filter((category) => category !== guess)].slice(0, 8);
+  const sheet = await actionSheetController.create({
+    header: `Add ${item.itemName} to Favorites`,
+    subHeader: "Category",
+    buttons: [
+      ...offered.map((category) => ({ text: category, data: { category } })),
+      { text: "New Category…", data: { create: true } },
+      { text: "No Category", data: { category: null } },
+      { text: "Cancel", role: "cancel" },
+    ],
+  });
+  await sheet.present();
+  const { data } = await sheet.onDidDismiss<{ category?: string | null; create?: boolean }>();
+  if (!data) return;
+  let category = data.category ?? null;
+  if (data.create) {
+    const typed = await promptForText({ header: "New Category", placeholder: "e.g. Coffee", confirmText: "Add" });
+    if (!typed) return;
+    category = categories.find((known) => known.toLowerCase() === typed.toLowerCase()) ?? capitalizeWords(typed);
+  }
+  try {
+    const favorite = await hlist.favoriteFromItem(item.itemId, category);
+    favorites.value = [...favorites.value.filter((known) => known.favoriteId !== favorite.favoriteId), favorite];
+    const toast = await toastController.create({
+      message: `Added to Favorites${favorite.category ? ` · ${favorite.category}` : ""}`,
+      duration: 2000,
+      position: "top",
+    });
+    await toast.present();
+  } catch (error) {
+    await showError(error, "Couldn't Add to Favorites");
+  }
+}
+
+async function unfavorite(favorite: Favorite): Promise<void> {
+  const alert = await alertController.create({
+    header: "Remove from Favorites?",
+    message: `${favorite.name} and its prices will be removed from your favorites. It stays on this list.`,
+    buttons: [
+      { text: "Cancel", role: "cancel" },
+      { text: "Remove", role: "destructive" },
+    ],
+  });
+  await alert.present();
+  const { role } = await alert.onDidDismiss();
+  if (role !== "destructive") return;
+  try {
+    await hlist.deleteFavorite(favorite.favoriteId);
+    favorites.value = favorites.value.filter((known) => known.favoriteId !== favorite.favoriteId);
+  } catch (error) {
+    await showError(error, "Couldn't Remove Favorite");
   }
 }
 
@@ -268,6 +350,7 @@ async function loadList(): Promise<void> {
 const reloadItems = debounced(loadItems);
 const reloadCatalog = debounced(loadCatalog);
 const reloadList = debounced(loadList);
+const reloadFavorites = debounced(loadFavorites);
 let stopLiveUpdates: () => void = () => {};
 
 async function refresh(event: RefresherCustomEvent): Promise<void> {
@@ -370,6 +453,7 @@ async function showOptions(): Promise<void> {
   const sheet = await actionSheetController.create({
     header: title.value,
     buttons: [
+      { text: "Add from Favorites", data: "favorites" },
       { text: showCompleted.value ? "Hide Completed Items" : "Show Completed Items", data: "completed-items" },
       { text: completed ? "Reopen List" : "Mark List as Done", data: "list-completion" },
       { text: "Cancel", role: "cancel" },
@@ -377,6 +461,7 @@ async function showOptions(): Promise<void> {
   });
   await sheet.present();
   const { data } = await sheet.onDidDismiss<string>();
+  if (data === "favorites") router.push(`/favorites?list=${props.listId}`);
   if (data === "completed-items") toggleShowCompleted();
   if (data === "list-completion") await setListCompleted(!completed);
 }
@@ -388,6 +473,9 @@ onMounted(() => {
       reloadItems();
       reloadCatalog();
       reloadList();
+      reloadFavorites();
+    } else if (event.type === "favorites") {
+      reloadFavorites();
     } else if (event.type === "list-items" && event.listId === props.listId) {
       reloadItems();
     } else if (event.type === "catalog") {
