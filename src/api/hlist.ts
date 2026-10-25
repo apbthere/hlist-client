@@ -1,5 +1,8 @@
 import { ApiError, request, send } from "./http";
-import type { AccessToken, Brand, Department, Item, ItemRequest, ListItem, Page, ShoppingList, Store, User } from "./types";
+import type {
+  AccessToken, AddedToList, Brand, Department, Favorite, FavoriteRequest, Item, ItemRequest, ListItem, Page, ShoppingList, Store,
+  User,
+} from "./types";
 
 // Auth
 
@@ -177,4 +180,31 @@ export function getBrands(): Promise<Brand[]> {
 
 export function createBrand(name: string): Promise<Brand> {
   return request("/api/brands", { method: "POST", body: { name } });
+}
+
+// Favorites
+
+export function getFavorites(): Promise<Favorite[]> {
+  return request("/api/favorites");
+}
+
+export function createFavorite(favorite: FavoriteRequest): Promise<Favorite> {
+  return request("/api/favorites", { method: "POST", body: favorite });
+}
+
+/** Makes an item a favorite (sold at the stores of the lists it was on); an existing favorite is returned as is. */
+export function favoriteFromItem(itemId: number, category: string | null): Promise<Favorite> {
+  return request("/api/favorites/from-item", { method: "POST", body: { itemId, category } });
+}
+
+export function updateFavorite(favoriteId: number, favorite: FavoriteRequest): Promise<Favorite> {
+  return request(`/api/favorites/${favoriteId}`, { method: "PUT", body: favorite });
+}
+
+export function deleteFavorite(favoriteId: number): Promise<void> {
+  return request(`/api/favorites/${favoriteId}`, { method: "DELETE" });
+}
+
+export function addFavoriteToList(favoriteId: number, listId: number): Promise<AddedToList> {
+  return request(`/api/favorites/${favoriteId}/add-to-list`, { method: "POST", body: { listId } });
 }

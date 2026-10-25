@@ -20,11 +20,12 @@ CI (`.github/workflows/ci.yml`) runs typecheck, tests and `vite build`. There is
 
 - `src/api/`: `http.ts` (fetch wrapper: CSRF header from the `XSRF-TOKEN` cookie, 401 → sign-in, `raw` blob
   bodies, `X-HList-Client` id for live updates), `hlist.ts` (typed endpoints), `types.ts`.
-- `src/router.ts`: `/login`, `/lists`, `/lists/:id`, `/add`. A guard requires sign-in. `/add` survives a sign-in
+- `src/router.ts`: `/login`, `/lists`, `/lists/:id`, `/add`, `/favorites` (`?list=<id>` picks favorites to add
+  to that list). A guard requires sign-in. `/add` survives a sign-in
   through `sessionStorage` (`pathAfterSignIn`).
 - `src/session.ts`: `signIn`, `passkeySignIn`, `signOut`.
 - `src/views/`: `ListsPage`, `ListItemsPage` (department groups, live updates, photo viewer),
-  `AddFromPage` (/add: see "Adding from store websites"), `LoginPage`.
+  `AddFromPage` (/add: see "Adding from store websites"), `LoginPage`, `FavoritesPage` (see "Favorites").
 - `src/components/ItemEditorSheet.vue`: the New/Edit Item sheet, the most involved component.
   - Name field: smart parsing ("Milk by Horizon in Dairy", asking before creating a brand or department from a
     one-part pattern), sounds-alike suggestions and fill-from-history.
@@ -54,6 +55,19 @@ CI (`.github/workflows/ci.yml`) runs typecheck, tests and `vite build`. There is
 - Keep taps to a minimum. The owner rejects flows with extra steps. Prefer filling things in automatically (paste
   into the name, suggestions under Photo) over extra menus.
 - Tests sit next to their subject in `tests/*.test.ts`. API calls are tested by stubbing `fetch`.
+
+## Favorites
+
+Favorite products, grouped by the user's categories, apart from lists and stores (server: `favorites/`).
+
+- `FavoritesPage`: the star on the Lists page opens it. Category groups, a search bar (name, brand, category,
+  notes, stores; `searchFavorites` in `lib/favorites.ts`), swipe right to Add (open lists of the stores that sell
+  it first, cheapest first, then "New <Store> List"), swipe left to Delete, tap to edit. From a list's options,
+  "Add from Favorites" opens it in picking mode (check several, then "Add N to List").
+- `FavoriteEditorSheet`: name (pasting a product link fills name, brand, photo and the link's store), photo,
+  category, brand, department (for lists), "Where to Buy" stores with price and size, notes, delete.
+- On a list, `ItemRow` shows a star for favorites (`favoriteFor`: same name and brand). Swiping left offers
+  Favorite/Unfavorite; Favorite asks for a category, the one `guessCategory` finds in the name first.
 
 ## Adding from store websites (`lib/addFromPage.ts`, `views/AddFromPage.vue`)
 

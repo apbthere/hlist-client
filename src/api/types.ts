@@ -98,3 +98,50 @@ export interface AccessToken {
   createdAt: string;
   lastUsedAt: string | null;
 }
+
+/** A store a favorite is sold at, with the price last seen there. */
+export interface FavoriteStore {
+  /** e.g. "Costco" (stores HList knows are spelled its way) or "Total Wine". */
+  name: string;
+  /** The store's key when HList knows it (for its icon), else null. */
+  key: string | null;
+  price: number | null;
+  /** What the price is for, e.g. "2 lb bag". */
+  size: string | null;
+  productUrl: string | null;
+  /** When the price was seen (ISO timestamp). */
+  priceCheckedAt: string | null;
+}
+
+/** A product the user buys again and again, kept apart from lists and grouped by the user's categories. */
+export interface Favorite {
+  favoriteId: number;
+  name: string;
+  brandId: number | null;
+  departmentId: number | null;
+  /** e.g. "Coffee"; null files it under Other. */
+  category: string | null;
+  comment: string | null;
+  photoId: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+  /** Cheapest known price first. */
+  stores: FavoriteStore[];
+}
+
+export interface FavoriteRequest {
+  name: string;
+  brandId: number | null;
+  departmentId: number | null;
+  category: string | null;
+  comment: string | null;
+  photoId: number | null;
+  stores: { name: string; price: number | null; size: string | null; productUrl: string | null }[];
+}
+
+/** What adding a favorite to a list did. */
+export interface AddedToList {
+  outcome: "added" | "unchecked" | "already_on_list";
+  listId: number;
+  itemId: number;
+}

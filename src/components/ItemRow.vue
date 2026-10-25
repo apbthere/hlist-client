@@ -22,6 +22,7 @@
       <ion-label>
         <h3>
           <span class="name">{{ item.itemName }}</span>
+          <ion-icon v-if="favorite" class="favorite-star" :icon="star" aria-label="Favorite" />
           <span v-if="(item.quantity ?? 1) > 1" class="quantity">× {{ item.quantity }}</span>
         </h3>
         <p v-if="detail">{{ detail }}</p>
@@ -39,6 +40,10 @@
     </ion-item>
 
     <ion-item-options side="end" @ion-swipe="emit('remove', slidingElement())">
+      <ion-item-option color="warning" @click="emit('favorite', slidingElement())">
+        <ion-icon slot="top" :icon="favorite ? starOutline : star" />
+        {{ favorite ? "Unfavorite" : "Favorite" }}
+      </ion-item-option>
       <ion-item-option color="danger" :expandable="true" @click="emit('remove', slidingElement())">
         <ion-icon slot="top" :icon="trash" />
         Remove
@@ -50,7 +55,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { IonIcon, IonItem, IonItemOption, IonItemOptions, IonItemSliding, IonLabel } from "@ionic/vue";
-import { arrowUndo, checkmarkCircle, ellipseOutline, trash } from "ionicons/icons";
+import { arrowUndo, checkmarkCircle, ellipseOutline, star, starOutline, trash } from "ionicons/icons";
 import type { ListItem } from "../api/types";
 import { thumbnailUrl } from "../lib/photos";
 
@@ -59,6 +64,8 @@ defineProps<{
   checked: boolean;
   /** Secondary line, e.g. brand and notes. */
   detail: string;
+  /** Whether the item is one of the user's favorites. */
+  favorite?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -66,6 +73,7 @@ const emit = defineEmits<{
   edit: [];
   remove: [sliding?: HTMLIonItemSlidingElement];
   photo: [];
+  favorite: [sliding?: HTMLIonItemSlidingElement];
 }>();
 
 const sliding = ref<{ $el: HTMLIonItemSlidingElement } | null>(null);
@@ -143,6 +151,13 @@ h3 {
   color: var(--hlist-secondary-label);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
+}
+
+.favorite-star {
+  flex: none;
+  align-self: center;
+  color: var(--ion-color-warning);
+  font-size: 14px;
 }
 
 ion-item.checked .name {
