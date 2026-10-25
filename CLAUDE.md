@@ -64,7 +64,8 @@ Favorite products, grouped by the user's categories, apart from lists and stores
   notes, stores; `searchFavorites` in `lib/favorites.ts`), swipe right to Add (open lists of the stores that sell
   it first, cheapest first, then "New <Store> List"), swipe left to Delete, tap to edit. From a list's options,
   "Add from Favorites" opens it in picking mode (check several, then "Add N to List").
-- `FavoriteEditorSheet`: name (pasting a product link fills name, brand, photo and the link's store), photo,
+- `FavoriteEditorSheet`: name (pasting a product link fills name, brand, photo and the link's store), photo (with
+  Open Food Facts suggestions for name and brand, as in the item editor),
   category, brand, department (for lists), "Where to Buy" stores with price and size, notes, delete.
 - On a list, `ItemRow` shows a star for favorites (`favoriteFor`: same name and brand). Swiping left offers
   Favorite/Unfavorite; Favorite asks for a category, the one `guessCategory` finds in the name first.
