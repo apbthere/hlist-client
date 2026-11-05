@@ -1,16 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultList, productFromQuery, shortcutScript, bookmarklet, storeForLink } from "../src/lib/addFromPage";
 import type { ShoppingList, Store } from "../src/api/types";
 
-/** Runs the Shortcut's script on a page, as Safari would, and returns the HList address it produces. */
-function runOnPage(html: string, url: string): URL {
+/**
+ * Runs the Shortcut's script on a page, as Safari would, and returns the HList address it produces. `whileWaiting`
+ * can change the page while the script waits for it.
+ */
+async function runOnPage(html: string, url: string, whileWaiting?: (page: Document) => void): Promise<URL> {
   const page = new DOMParser().parseFromString(html, "text/html");
   const location = { href: url, hostname: new URL(url).hostname };
-  let result = "";
   // The script uses the page's document and location, and hands its result to completion().
-  new Function("document", "location", "completion", shortcutScript("https://hlist.test"))(page, location, (value: string) => (result = value));
-  return new URL(result);
+  const result = new Promise<string>((resolve) => {
+    new Function("document", "location", "completion", shortcutScript("https://hlist.test"))(page, location, resolve);
+  });
+  whileWaiting?.(page);
+  return new URL(await result);
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const store = (key: string, name: string, ...domains: string[]): Store =>
   ({ key, name, site: `https://www.${domains[0]}`, domains, aliases: [], iconUrl: "" });
@@ -33,8 +42,8 @@ const PUBLIX_PAGE = `<html><head>
 </main></body></html>`;
 
 describe("the store page script", () => {
-  it("sends a product's name, photo and the text around the name", () => {
-    const url = runOnPage(PUBLIX_PAGE, "https://www.publix.com/pd/publix-mild-pork-italian-sausage/RIO-PCI-1");
+  it("sends a product's name, photo and the text around the name", async () => {
+    const url = await runOnPage(PUBLIX_PAGE, "https://www.publix.com/pd/publix-mild-pork-italian-sausage/RIO-PCI-1");
 
     expect(url.origin + url.pathname).toBe("https://hlist.test/app/add");
     expect(Object.fromEntries(url.searchParams)).toEqual({
@@ -46,8 +55,8 @@ describe("the store page script", () => {
     });
   });
 
-  it("turns a Publix page's text into the store section, size and brand", () => {
-    const url = runOnPage(PUBLIX_PAGE.replace("Meat", "Aisle 3 - International Foods - Mexican")
+  it("turns a Publix page's text into the store section, size and brand", async () => {
+    const url = await runOnPage(PUBLIX_PAGE.replace("Meat", "Aisle 3 - International Foods - Mexican")
       .replace("Publix Mild Pork Italian Sausage, Our Exclusive Recipe</h1>", "Mission Super Soft Extra Thin Yellow Corn Tortillas</h1>")
       .replace("20 oz Pkg", "24 tortillas [16 oz (1 lb) 453 g]"), "https://www.publix.com/pd/mission-tortillas/RIO-PCI-2");
 
@@ -57,28 +66,59 @@ describe("the store page script", () => {
       size: "24 tortillas [16 oz (1 lb) 453 g]",
       brand: undefined,
     });
-    expect(productFromQuery(Object.fromEntries(runOnPage(PUBLIX_PAGE, "https://www.publix.com/pd/x").searchParams)))
+    expect(productFromQuery(Object.fromEntries((await runOnPage(PUBLIX_PAGE, "https://www.publix.com/pd/x")).searchParams)))
       .toMatchObject({ section: "Meat", size: "20 oz Pkg", brand: "Publix" });
   });
 
-  it("uses the text around the name only on Publix", () => {
-    const url = runOnPage(PUBLIX_PAGE, "https://www.example.com/p/sausage");
+  it("uses the text around the name only on Publix", async () => {
+    const url = await runOnPage(PUBLIX_PAGE, "https://www.example.com/p/sausage");
 
     expect(productFromQuery(Object.fromEntries(url.searchParams))).toMatchObject({ section: undefined, size: undefined, brand: undefined });
   });
 
-  it("reads only the name and photo elsewhere, falling back to the page title", () => {
-    const url = runOnPage(`<html><head><title>Kirkland Almonds, 3 lb | Costco</title>
+  it("reads only the name and photo elsewhere, falling back to the page title", async () => {
+    vi.useFakeTimers();
+    const reading = runOnPage(`<html><head><title>Kirkland Almonds, 3 lb | Costco</title>
       <meta property="og:image" content="https://cdn.test/almonds.jpg"></head><body><p>Warehouse</p></body></html>`,
     "https://www.costco.com/almonds.html");
+    await vi.advanceTimersByTimeAsync(1500);
+    const url = await reading;
 
     expect(Object.fromEntries(url.searchParams)).toEqual({
       name: "Kirkland Almonds, 3 lb", photo: "https://cdn.test/almonds.jpg", link: "https://www.costco.com/almonds.html",
     });
   });
 
+  it("waits for a page that builds itself to show the product", async () => {
+    vi.useFakeTimers();
+    const url = await runOnPage("<html><head></head><body><main></main></body></html>",
+      "https://www.costco.com/p/-/limes-3-lbs/100443126", (page) => {
+        void vi.advanceTimersByTimeAsync(700).then(() => {
+          page.title = "Limes, 3 lbs | Costco";
+          page.querySelector("main")!.innerHTML = "<div><section><h1>Limes, 3 lbs</h1></section></div>";
+        }).then(() => vi.advanceTimersByTimeAsync(500));
+      });
+
+    expect(Object.fromEntries(url.searchParams)).toEqual({ name: "Limes, 3 lbs", link: "https://www.costco.com/p/-/limes-3-lbs/100443126" });
+  });
+
+  it("settles for og:title without a heading, and sends only the link from a page that stays empty", async () => {
+    vi.useFakeTimers();
+    const titled = runOnPage(`<html><head><meta property="og:title" content="Limes, 3 lbs | Costco"></head><body></body></html>`,
+      "https://www.costco.com/p/-/limes-3-lbs/100443126");
+    await vi.advanceTimersByTimeAsync(1500);
+    expect((await titled).searchParams.get("name")).toBe("Limes, 3 lbs");
+
+    const empty = runOnPage("<html><head></head><body></body></html>", "https://www.costco.com/p/-/limes-3-lbs/100443126");
+    await vi.advanceTimersByTimeAsync(5000);
+    const url = await empty;
+    expect(Object.fromEntries(url.searchParams)).toEqual({ link: "https://www.costco.com/p/-/limes-3-lbs/100443126" });
+    expect(productFromQuery(Object.fromEntries(url.searchParams))).toBeNull();
+  });
+
   it("makes a bookmark that opens HList", () => {
-    expect(bookmarklet("https://hlist.test")).toMatch(/^javascript:\(\(\)=>\{location\.href=/);
+    expect(bookmarklet("https://hlist.test")).toMatch(/^javascript:\(\(\)=>\{\(/);
+    expect(bookmarklet("https://hlist.test")).toContain(".then((address)=>{location.href=address.replace(");
     expect(bookmarklet("https://hlist.test")).toContain('"https://hlist.test"');
   });
 });

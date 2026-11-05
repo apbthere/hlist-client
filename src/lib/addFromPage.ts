@@ -24,39 +24,57 @@ export interface ProductFromPage {
  * text just above and just below the name. What that text means is decided by productFromQuery, in HList, so
  * changes to it don't need the bookmark or Shortcut set up again. It's written against the page's layout rather
  * than the site's internal names, so small site changes don't break it.
+ *
+ * Pages built in the browser (costco.com's /p/ pages) have no heading or title for a moment after they open, so it
+ * waits for the heading: up to 1.5 s before settling for og:title or the page title, and 5 s in all. A page still empty then sends
+ * only its link, and HList asks to try again.
  */
-function readProductPage(): string {
+function readProductPage(): Promise<string> {
   const meta = (key: string): string => {
     const tag = document.querySelector(`meta[property="${key}"],meta[name="${key}"]`);
     return (tag?.getAttribute("content") ?? "").trim();
   };
   const text = (element: Element | null): string =>
     ((element as HTMLElement | null)?.innerText ?? element?.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
-  const heading = document.querySelector("main h1, h1");
-  let name = text(heading);
-  if (!name) name = (meta("og:title") || document.title).replace(/\s+[|\u2013\u2014-]\s+[^|\u2013\u2014]+$/, "").trim();
-  const found: Record<string, string> = { name, photo: meta("og:image"), link: location.href };
-  if (heading) {
-    // The nearest text before the name, looking up to three levels out (Publix: the store section label).
-    for (let node: Element | null = heading, depth = 0; node && depth < 3 && !found.above; node = node.parentElement, depth++) {
-      for (let before = node.previousElementSibling; before && !found.above; before = before.previousElementSibling) {
-        found.above = text(before);
+  const read = (): string => {
+    const heading = document.querySelector("main h1, h1");
+    let name = text(heading);
+    if (!name) name = (meta("og:title") || document.title).replace(/\s+[|\u2013\u2014-]\s+[^|\u2013\u2014]+$/, "").trim();
+    const found: Record<string, string> = { name, photo: meta("og:image"), link: location.href };
+    if (heading) {
+      // The nearest text before the name, looking up to three levels out (Publix: the store section label).
+      for (let node: Element | null = heading, depth = 0; node && depth < 3 && !found.above; node = node.parentElement, depth++) {
+        for (let before = node.previousElementSibling; before && !found.above; before = before.previousElementSibling) {
+          found.above = text(before);
+        }
       }
+      found.below = text(heading.nextElementSibling);
     }
-    found.below = text(heading.nextElementSibling);
-  }
-  const query = Object.keys(found).filter((key) => found[key]).map((key) => `${key}=${encodeURIComponent(found[key])}`).join("&");
-  return `__HLIST__/app/add?${query}`;
+    const query = Object.keys(found).filter((key) => found[key]).map((key) => `${key}=${encodeURIComponent(found[key])}`).join("&");
+    return `__HLIST__/app/add?${query}`;
+  };
+  const started = Date.now();
+  return new Promise((resolve) => {
+    const check = (): void => {
+      const waited = Date.now() - started;
+      if (text(document.querySelector("main h1, h1")) || (waited >= 1500 && (meta("og:title") || document.title.trim())) || waited >= 5000) {
+        resolve(read());
+      } else {
+        setTimeout(check, 250);
+      }
+    };
+    check();
+  });
 }
 
 /** The bookmark's address: drag it to Safari's Favorites bar, then click it on a product page. */
 export function bookmarklet(origin: string): string {
-  return `javascript:(()=>{location.href=(${readProductPage.toString()})().replace("__HLIST__",${JSON.stringify(origin)})})()`;
+  return `javascript:(()=>{(${readProductPage.toString()})().then((address)=>{location.href=address.replace("__HLIST__",${JSON.stringify(origin)})})})()`;
 }
 
-/** The iPad Shortcut's "Run JavaScript on Web Page" script; the Shortcut then opens the address it returns. */
+/** The Shortcut's "Run JavaScript on Web Page" script (iPad, iPhone); the Shortcut then opens the address it returns. */
 export function shortcutScript(origin: string): string {
-  return `completion((${readProductPage.toString()})().replace("__HLIST__", ${JSON.stringify(origin)}));`;
+  return `(${readProductPage.toString()})().then((address) => completion(address.replace("__HLIST__", ${JSON.stringify(origin)})));`;
 }
 
 function isPublix(link: string | undefined): boolean {
