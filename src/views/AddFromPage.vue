@@ -38,6 +38,16 @@
       </template>
 
       <template v-else>
+        <!-- The script found no product name: the page hadn't finished loading, or isn't a product page. -->
+        <ion-list v-if="unreadPage" :inset="true">
+          <ion-item lines="none">
+            <ion-label class="ion-text-wrap setup">
+              <h2>The page wasn’t ready</h2>
+              <p>HList couldn’t find the product on that page. Wait until the page has finished loading, then use Add to HList again.</p>
+            </ion-label>
+          </ion-item>
+        </ion-list>
+
         <div class="section-header">On a Mac</div>
         <ion-list :inset="true">
           <ion-item lines="none">
@@ -97,6 +107,8 @@ import { formatDate } from "../lib/format";
 const route = useRoute();
 const router = useIonRouter();
 const product = computed(() => productFromQuery(route.query));
+/** Opened from a page without a product name (only its link). */
+const unreadPage = computed(() => !product.value && typeof route.query.link === "string" && route.query.link !== "");
 const details = computed(() => [product.value?.brand, product.value?.section, product.value?.size].filter(Boolean).join(" · "));
 const lists = ref<ShoppingList[]>([]);
 const stores = ref<Store[]>([]);
@@ -184,6 +196,12 @@ onIonViewWillEnter(() => void load());
   margin-left: 6px;
   color: var(--hlist-secondary-label);
   font-size: 15px;
+}
+
+.setup h2 {
+  margin-bottom: 4px;
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .setup p,

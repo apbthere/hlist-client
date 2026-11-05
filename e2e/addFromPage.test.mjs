@@ -40,3 +40,37 @@ test("without an open list for the store, /add creates one and opens its New Ite
     await browser.close();
   }
 });
+
+test("the Shortcut's script waits for a page that builds itself, and /add asks to try again when it never does", async () => {
+  const { browser, page, errors } = await openBrowser();
+  try {
+    await signUp(page);
+    await page.goto(`${baseUrl}/app/add`);
+    const script = await page.locator("pre.script").textContent();
+
+    // A store page whose product appears after a moment, as on costco.com's /p/ pages.
+    const store = await page.context().newPage();
+    await store.goto(`${baseUrl}/app/does-not-matter`);
+    await store.setContent("<html><head></head><body><main></main></body></html>");
+    const run = (source) => store.evaluate((code) => new Promise((resolve) => {
+      new Function("completion", code)(resolve);
+    }), source);
+    const late = run(script);
+    await store.evaluate(() => setTimeout(() => {
+      document.querySelector("main").innerHTML = "<div><section><h1>Limes, 3 lbs</h1></section></div>";
+    }, 700));
+    const address = new URL(await late);
+    assert.equal(address.searchParams.get("name"), "Limes, 3 lbs");
+
+    await store.setContent("<html><head></head><body></body></html>");
+    const empty = new URL(await run(script));
+    assert.equal(empty.searchParams.get("name"), null);
+
+    await page.goto(`${baseUrl}/app/add?link=${encodeURIComponent("https://www.costco.com/p/-/limes-3-lbs/100443126")}`);
+    await page.getByText("The page wasn’t ready").waitFor();
+    await screenshot(page, "add-from-page-not-ready");
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
+});
